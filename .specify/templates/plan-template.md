@@ -40,7 +40,15 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Aligned with `.specify/memory/constitution.md` (FAC-App: readability, reusability, user
+experience):
+
+- **Readability**: Plan lists main modules/files; non-obvious control flow or naming
+  conventions are explained in Summary or Technical Context.
+- **Reusability**: Shared units vs single-use code called out; duplication either absent or
+  listed in Complexity Tracking with removal plan.
+- **User experience**: Spec user stories and acceptance scenarios cover primary, error, and
+  empty states where applicable; success criteria stay measurable and spec-linked.
 
 ## Project Structure
 

@@ -11,6 +11,10 @@
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
+  Constitution: FAC-App prioritizes readable specs, reusable journeys (independent slices),
+  and measurable user experience—keep scenarios concrete enough for reviewers without private
+  context.
+
   IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
   Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
   you should still have a viable MVP (Minimum Viable Product) that delivers value.

@@ -153,6 +153,9 @@ Examples of foundational tasks (adjust based on your project):
 
 - [ ] TXXX [P] Documentation updates in docs/
 - [ ] TXXX Code cleanup and refactoring
+- [ ] TXXX Constitution pass: public names, module boundaries, and duplication scan
+  (readability + reusability)
+- [ ] TXXX UX sweep vs spec: error/empty/loading states, messaging, a11y expectations
 - [ ] TXXX Performance optimization across all stories
 - [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
 - [ ] TXXX Security hardening
