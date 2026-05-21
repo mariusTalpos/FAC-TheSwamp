@@ -2,6 +2,7 @@
  * Grant `fac_admin` to the first user matching an email (bootstrap helper).
  * Usage: `pnpm db:grant-admin -- you@example.com`
  */
+import "../src/lib/env/load-env";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../src/lib/db/index";
 import { operationalRoles, roleAssignments, users } from "../src/lib/db/schema";

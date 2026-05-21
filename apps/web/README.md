@@ -1,6 +1,6 @@
 # FAC web app (`apps/web`)
 
-Epic E1 implementation: Next.js (App Router), PostgreSQL, Drizzle ORM, Auth.js v5 (database sessions), Zod validation, Vitest, Playwright.
+Epic E1 implementation: Next.js (App Router), PostgreSQL, Drizzle ORM, Auth.js v5 (JWT sessions + Credentials), Zod validation, Vitest, Playwright.
 
 ## Prerequisites
 
@@ -14,8 +14,21 @@ Epic E1 implementation: Next.js (App Router), PostgreSQL, Drizzle ORM, Auth.js v
 3. `cd apps/web && npx pnpm@10.9.0 install`
 4. `npx pnpm@10.9.0 db:migrate` (requires `DATABASE_URL`)
 5. `npx pnpm@10.9.0 db:seed` — seeds `operational_role` rows (`fac_admin`, `marshal`, …).
-6. Register the first fighter account via `/register/fighter`, then grant admin:  
-   `npx pnpm@10.9.0 db:grant-admin -- your@email.com`
+6. **Dev test accounts** (optional, for permission testing):  
+   `npx pnpm@10.9.0 db:seed-dev` — see table below.  
+   Or register via `/register/fighter`, then `npx pnpm@10.9.0 db:grant-admin -- your@email.com`.
+
+### Dev test accounts (`pnpm db:seed-dev`)
+
+| Email | Password (default) | Roles | Fighter profile |
+|-------|-------------------|-------|-----------------|
+| `admin@fac.test` | `TestPassword123!` | `fac_admin` | no |
+| `marshal@fac.test` | same | `marshal` | yes (complete) |
+| `organizer@fac.test` | same | `organizer` | no |
+| `squire@fac.test` | same | `squire` | no |
+| `fighter@fac.test` | same | none | yes (complete) |
+
+Override password: `DEV_SEED_PASSWORD=YourSecret pnpm db:seed-dev`
 
 ## Scripts
 

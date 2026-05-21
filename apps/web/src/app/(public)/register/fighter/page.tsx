@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { isCredentialsSignInFailure } from "@/lib/auth/sign-in-result";
 
 export default function FighterRegisterPage() {
   const [email, setEmail] = useState("");
@@ -31,7 +32,7 @@ export default function FighterRegisterPage() {
         password,
         redirect: false,
       });
-      if (sign?.error) {
+      if (isCredentialsSignInFailure(sign)) {
         setError("Account created but sign-in failed. Try signing in manually.");
         return;
       }

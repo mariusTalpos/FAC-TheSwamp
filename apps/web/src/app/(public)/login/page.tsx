@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { isCredentialsSignInFailure } from "@/lib/auth/sign-in-result";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -20,8 +21,8 @@ export default function LoginPage() {
         password,
         redirect: false,
       });
-      if (res?.error) {
-        setError("Invalid email or password.");
+      if (isCredentialsSignInFailure(res)) {
+        setError("Invalid email or password. Check spelling and try again.");
         return;
       }
       window.location.href = "/me";
@@ -73,6 +74,26 @@ export default function LoginPage() {
       <p>
         New fighter? <Link href="/register/fighter">Create an account</Link>
       </p>
+      {process.env.NEXT_PUBLIC_DEV_LOGIN_HINT === "true" ? (
+        <details style={{ marginTop: "1.5rem" }}>
+          <summary>Dev test accounts</summary>
+          <p style={{ fontSize: "0.9rem" }}>
+            After <code>pnpm db:seed-dev</code>, password for all seeded users is{" "}
+            <strong>TestPassword123!</strong> unless you set <code>DEV_SEED_PASSWORD</code>.
+          </p>
+          <ul style={{ fontSize: "0.9rem" }}>
+            <li>
+              <code>admin@fac.test</code> — FAC admin
+            </li>
+            <li>
+              <code>fighter@fac.test</code> — fighter only (no admin)
+            </li>
+            <li>
+              <code>marshal@fac.test</code> — hybrid marshal + fighter
+            </li>
+          </ul>
+        </details>
+      ) : null}
     </main>
   );
 }

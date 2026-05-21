@@ -1,3 +1,4 @@
+import "../src/lib/env/load-env";
 import { db } from "../src/lib/db/index";
 import { operationalRoles } from "../src/lib/db/schema";
 import { OPERATIONAL_ROLE_SEEDS } from "../src/lib/db/seeds/operational-roles";
