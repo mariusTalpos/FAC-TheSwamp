@@ -1,0 +1,553 @@
+openapi: 3.0.3
+info:
+  title: FAC-App — Foundation (Identity, Roles, Audit) API
+  version: 0.1.0
+  description: >
+    Contract sketch for Epic E1. Paths and schemas align with spec.md stories;
+    implementation may nest under `/api` or Next Route Handlers — preserve semantics.
+
+servers:
+  - url: https://api.example.com
+    description: Production (placeholder)
+
+tags:
+  - name: Auth
+  - name: FighterProfile
+  - name: Public
+  - name: Admin
+  - name: Audit
+
+paths:
+  /auth/register/fighter:
+    post:
+      tags: [Auth]
+      summary: Fighter self-registration (adult attestation required)
+      operationId: registerFighter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FighterRegistrationRequest'
+      responses:
+        '201':
+          description: Account and fighter profile shell created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+        '400':
+          description: Validation or adults-only refusal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email already registered
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Sign in
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Session established
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+        '401':
+          description: Invalid credentials
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Sign out current session
+      operationId: logout
+      security:
+        - sessionCookie: []
+      responses:
+        '204':
+          description: Session ended
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset email
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        '202':
+          description: If email exists, reset message sent (no enumeration)
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Complete password reset using time-limited proof from recovery message
+      operationId: resetPassword
+      description: >
+        Satisfies spec FR-002 reset completion: caller presents the secret proof (e.g. token from
+        email link) and a new password. Invalid or expired proofs return 400 without revealing
+        which part failed beyond a generic client message.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetCompleteRequest'
+      responses:
+        '200':
+          description: Password updated; session may be established per product policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSessionResponse'
+        '400':
+          description: Invalid or expired proof, or weak password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /me/fighter-profile:
+    get:
+      tags: [FighterProfile]
+      summary: Authenticated fighter view (includes hidden fields)
+      operationId: getMyFighterProfile
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Full fighter profile for the authenticated owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FighterProfilePrivate'
+        '401':
+          description: Unauthenticated
+        '404':
+          description: No fighter profile on account
+
+    patch:
+      tags: [FighterProfile]
+      summary: Update profile fields and visibility toggles
+      operationId: patchMyFighterProfile
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FighterProfilePatch'
+      responses:
+        '200':
+          description: Updated fighter profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FighterProfilePrivate'
+        '400':
+          description: Minimum policy not met or invalid payload
+
+  /public/fighters/{fighterId}:
+    get:
+      tags: [Public]
+      summary: Anonymous public fighter page (filtered by visibility)
+      operationId: getPublicFighterPage
+      parameters:
+        - name: fighterId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Public-safe fighter profile payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FighterProfilePublic'
+        '404':
+          description: Unknown or profile not complete / not public
+
+  /admin/users:
+    post:
+      tags: [Admin]
+      summary: Provision staff-oriented user — direct active account or email invitation (FAC admin)
+      operationId: adminCreateUser
+      description: >
+        Matches spec FR-007: `direct_active` creates a sign-in-capable account (initial password
+        policy per FAC); `email_invitation` creates a pending enrollment path for the recipient
+        to complete without self-granting operational roles.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminProvisionUserRequest'
+      responses:
+        '201':
+          description: User provisioned (active or invitation sent per mode)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+                    format: uuid
+                  provisionMode:
+                    type: string
+                    enum: [direct_active, email_invitation]
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Not FAC admin
+        '409':
+          description: Email already in use
+
+  /admin/users/{userId}/deactivate:
+    post:
+      tags: [Admin]
+      summary: Deactivate user account (FAC admin)
+      operationId: adminDeactivateUser
+      description: >
+        Disables sign-in and related access per spec US3; blocked with 409 when it would violate
+        FR-013 (sole remaining FAC administrator). Audit `user.deactivated` is written on success.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Account deactivated
+        '403':
+          description: Not FAC admin
+        '404':
+          description: User not found
+        '409':
+          description: FR-013 last FAC administrator constraint
+
+  /admin/users/{userId}/fighter-profile:
+    get:
+      tags: [Admin]
+      summary: Full fighter profile for target user (FAC admin)
+      description: Returns the same class of fields as GET /me/fighter-profile for the owner, including visibility map and elements hidden from the public page (FR-005).
+      operationId: adminGetUserFighterProfile
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Full fighter profile for the target user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FighterProfilePrivate'
+        '401':
+          description: Unauthenticated
+        '403':
+          description: Not FAC admin
+        '404':
+          description: No fighter profile on this user account
+
+  /admin/users/{userId}/roles:
+    post:
+      tags: [Admin]
+      summary: Assign operational role
+      operationId: adminAssignRole
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operationalRoleKey]
+              properties:
+                operationalRoleKey:
+                  type: string
+                  example: marshal
+      responses:
+        '200':
+          description: Role assigned; audit event written
+        '403':
+          description: Denied — FR-010
+        '409':
+          description: FR-013 last admin constraint
+
+    delete:
+      tags: [Admin]
+      summary: Revoke operational role
+      operationId: adminRevokeRole
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [operationalRoleKey]
+              properties:
+                operationalRoleKey:
+                  type: string
+      responses:
+        '204':
+          description: Revoked; audit written
+        '403':
+          description: Denied
+        '409':
+          description: FR-013 last admin constraint
+
+  /admin/users/{userId}/audit:
+    get:
+      tags: [Audit]
+      summary: Chronological audit trail for a user (FAC admin)
+      operationId: adminGetUserAudit
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: cursor
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        '200':
+          description: Paginated audit events for the user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditPage'
+        '403':
+          description: Not FAC admin
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: fac.session
+      description: Session cookie name is illustrative; use Auth.js default in implementation.
+
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+    FighterRegistrationRequest:
+      type: object
+      required: [email, password, adultAttestation]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 10
+        adultAttestation:
+          type: boolean
+          description: Must be true to proceed (FR-001, FR-012)
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    PasswordResetCompleteRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+          description: Opaque proof from the recovery message (single-use, time-limited)
+        newPassword:
+          type: string
+          minLength: 10
+
+    AdminProvisionUserRequest:
+      oneOf:
+        - type: object
+          title: DirectActive
+          required: [provisionMode, email, initialPassword]
+          properties:
+            provisionMode:
+              type: string
+              enum: [direct_active]
+            email:
+              type: string
+              format: email
+            initialPassword:
+              type: string
+              minLength: 10
+              description: >
+                Initial password for the new account; FAC may require change-on-first-sign-in
+                outside this contract's scope.
+        - type: object
+          title: EmailInvitation
+          required: [provisionMode, email]
+          properties:
+            provisionMode:
+              type: string
+              enum: [email_invitation]
+            email:
+              type: string
+              format: email
+
+    AuthSessionResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        fighterProfileId:
+          type: string
+          format: uuid
+          nullable: true
+
+    FighterProfilePrivate:
+      type: object
+      description: Full fighter profile for the authenticated owner (GET /me/fighter-profile) or for a FAC administrator viewing another user (GET /admin/users/{userId}/fighter-profile); includes visibility map and fields hidden from the public page
+      properties:
+        id:
+          type: string
+          format: uuid
+        completionState:
+          type: string
+          enum: [incomplete, complete]
+        displayName:
+          type: string
+        visibility:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              public:
+                type: boolean
+
+    FighterProfilePatch:
+      type: object
+      properties:
+        displayName:
+          type: string
+        visibility:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              public:
+                type: boolean
+
+    FighterProfilePublic:
+      type: object
+      description: Filtered per FR-004 / FR-005; always includes policy minimum public facts
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+
+    AuditEvent:
+      type: object
+      properties:
+        id:
+          type: integer
+        eventType:
+          type: string
+        actorUserId:
+          type: string
+          format: uuid
+          nullable: true
+        targetUserId:
+          type: string
+          format: uuid
+          nullable: true
+        payload:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+
+    AuditPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        nextCursor:
+          type: string
+          nullable: true

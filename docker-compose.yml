@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fac
+      POSTGRES_PASSWORD: fac
+      POSTGRES_DB: fac_app
+    ports:
+      - "5432:5432"
+    volumes:
+      - fac_pg_data:/var/lib/postgresql/data
+
+volumes:
+  fac_pg_data:

@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build / Next.js
+.next/
+out/
+dist/
+build/
+.turbo/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+!.env*.example
+
+# Logs & caches
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.eslintcache
+
+# Test / coverage
+coverage/
+playwright-report/
+test-results/
+.blobstore/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+.idea/
+
+# Drizzle (optional local artifacts)
+*.local.sql
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
