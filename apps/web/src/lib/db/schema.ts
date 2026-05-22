@@ -136,3 +136,80 @@ export const auditEvents = pgTable("audit_event", {
     .default(sql`'{}'::jsonb`),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
+
+/** Epic E2 — teams & rosters */
+export const teamStatusEnum = pgEnum("team_status", ["active", "deactivated"]);
+export const teamMemberKindEnum = pgEnum("team_member_kind", ["fighter", "squire"]);
+export const teamMembershipStatusEnum = pgEnum("team_membership_status", [
+  "pending",
+  "active",
+  "rejected",
+  "ended",
+]);
+
+export const teams = pgTable("team", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").unique(),
+  region: text("region"),
+  tierOrDivision: text("tier_or_division"),
+  contactEmail: text("contact_email"),
+  contactPhone: text("contact_phone"),
+  status: teamStatusEnum("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
+export const teamCaptainAssignments = pgTable(
+  "team_captain_assignment",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    assignedByUserId: text("assigned_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    validFrom: timestamp("valid_from", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    validTo: timestamp("valid_to", { withTimezone: true, mode: "date" }),
+  },
+  (t) => ({
+    activeCaptainUnique: uniqueIndex("team_captain_assignment_team_user_active")
+      .on(t.teamId, t.userId)
+      .where(sql`${t.validTo} IS NULL`),
+  }),
+);
+
+export const teamMemberships = pgTable(
+  "team_membership",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    memberKind: teamMemberKindEnum("member_kind").notNull(),
+    status: teamMembershipStatusEnum("status").notNull().default("pending"),
+    requestedAt: timestamp("requested_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    startedAt: timestamp("started_at", { withTimezone: true, mode: "date" }),
+    endedAt: timestamp("ended_at", { withTimezone: true, mode: "date" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true, mode: "date" }),
+    decidedByUserId: text("decided_by_user_id").references(() => users.id),
+    decisionNote: text("decision_note"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    activeMemberKindUnique: uniqueIndex("team_membership_user_kind_active")
+      .on(t.userId, t.memberKind)
+      .where(sql`${t.status} = 'active'`),
+    pendingPerTeamUnique: uniqueIndex("team_membership_user_team_kind_pending")
+      .on(t.userId, t.teamId, t.memberKind)
+      .where(sql`${t.status} = 'pending'`),
+  }),
+);

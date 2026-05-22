@@ -10,6 +10,8 @@ export default async function MePage() {
   }
 
   const isAdmin = session.user.roleKeys?.includes("fac_admin");
+  const isMarshal = session.user.roleKeys?.includes("marshal");
+  const roleKeys = session.user.roleKeys ?? [];
 
   return (
     <main>
@@ -19,10 +21,29 @@ export default async function MePage() {
         <li>
           <Link href="/me/fighter-profile">Fighter profile</Link>
         </li>
-        {isAdmin ? (
+        {!isMarshal || roleKeys.includes("fighter") || roleKeys.length === 0 ? (
           <li>
-            <Link href="/admin/users">Admin — users</Link>
+            <Link href="/me/team-affiliation">Team affiliation</Link>
+            {!isMarshal ? (
+              <span> — fighters apply to teams; you are unaffiliated until approved</span>
+            ) : (
+              <span> — optional for marshal accounts without a team</span>
+            )}
           </li>
+        ) : (
+          <li>
+            <span>Marshal access does not require team membership.</span>
+          </li>
+        )}
+        {isAdmin ? (
+          <>
+            <li>
+              <Link href="/admin/users">Admin — users</Link>
+            </li>
+            <li>
+              <Link href="/admin/teams">Admin — teams</Link>
+            </li>
+          </>
         ) : null}
         <li>
           <SignOutButton />

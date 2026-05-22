@@ -2,8 +2,11 @@ import { test, expect } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
+const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const npx = process.platform === "win32" ? "npx.cmd" : "npx";
 
 test("SC-004: audit API returns role assignment events for FAC admin", async ({ browser }) => {
   const adminEmail = `e2e_adm_${Date.now()}@example.com`;
@@ -20,12 +23,12 @@ test("SC-004: audit API returns role assignment events for FAC admin", async ({ 
     timeout: 30_000,
   });
 
-  const cwd = path.resolve(__dirname, "..");
   await execFileAsync(
-    "npx",
-    ["pnpm@10.9.0", "db:grant-admin", "--", adminEmail],
+    npx,
+    ["tsx", "scripts/grant-fac-admin.ts", adminEmail],
     {
-      cwd,
+      cwd: appDir,
+      shell: process.platform === "win32",
       env: {
         ...process.env,
         DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://fac:fac@127.0.0.1:5432/fac_app",

@@ -1,0 +1,25 @@
+import { NextResponse } from "next/server";
+import { problemJson } from "@/lib/api/problem-json";
+import { isPublicTeamRosterEnabled } from "@/lib/teams/public-flag";
+import { getTeamById } from "@/lib/teams/team-service";
+
+export async function GET(
+  _req: Request,
+  ctx: { params: Promise<{ teamId: string }> },
+) {
+  if (!isPublicTeamRosterEnabled()) {
+    return NextResponse.json(problemJson("not_found", "Public access disabled"), { status: 404 });
+  }
+
+  const { teamId } = await ctx.params;
+  const team = await getTeamById(teamId);
+  if (!team || team.status !== "active") {
+    return NextResponse.json(problemJson("not_found", "Team not found"), { status: 404 });
+  }
+
+  return NextResponse.json({
+    id: team.id,
+    name: team.name,
+    region: team.region,
+  });
+}
