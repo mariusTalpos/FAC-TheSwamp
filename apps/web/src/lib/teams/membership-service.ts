@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  fighterProfiles,
   teamCaptainAssignments,
   teamMemberships,
   teams,
@@ -24,7 +25,8 @@ export type MembershipServiceError =
   | "not_active"
   | "self_approval"
   | "forbidden"
-  | "squire_role_required";
+  | "squire_role_required"
+  | "fighter_profile_required";
 
 export async function applyToTeam(params: {
   userId: string;
@@ -44,6 +46,15 @@ export async function applyToTeam(params: {
   if (params.memberKind === "squire") {
     const keys = await getOperationalRoleKeysForUser(params.userId);
     if (!keys.includes("squire")) return { error: "squire_role_required" };
+  }
+
+  if (params.memberKind === "fighter") {
+    const [fighterProfile] = await db
+      .select({ id: fighterProfiles.id })
+      .from(fighterProfiles)
+      .where(eq(fighterProfiles.userId, params.userId))
+      .limit(1);
+    if (!fighterProfile) return { error: "fighter_profile_required" };
   }
 
   const [activeOther] = await db
