@@ -43,6 +43,9 @@ export default async function MePage() {
             <li>
               <Link href="/admin/teams">Admin — teams</Link>
             </li>
+            <li>
+              <Link href="/admin/teams/overview">Admin — teams overview</Link>
+            </li>
           </>
         ) : null}
         <li>

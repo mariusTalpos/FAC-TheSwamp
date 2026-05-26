@@ -23,6 +23,8 @@ type Member = {
 
 type UserRow = { id: string; email: string };
 
+type CaptainRow = { userId: string; email: string; validFrom: string };
+
 export default function AdminTeamDetailPage() {
   const params = useParams();
   const teamId = params.teamId as string;
@@ -30,6 +32,7 @@ export default function AdminTeamDetailPage() {
   const [roster, setRoster] = useState<Member[]>([]);
   const [history, setHistory] = useState<Member[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [captains, setCaptains] = useState<CaptainRow[]>([]);
   const [captainUserId, setCaptainUserId] = useState("");
   const [name, setName] = useState("");
   const [region, setRegion] = useState("");
@@ -37,11 +40,12 @@ export default function AdminTeamDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [teamsRes, rosterRes, histRes, usersRes] = await Promise.all([
+    const [teamsRes, rosterRes, histRes, usersRes, captainsRes] = await Promise.all([
       fetch("/api/admin/teams"),
       fetch(`/api/admin/teams/${teamId}/roster`),
       fetch(`/api/admin/teams/${teamId}/memberships/history`),
       fetch("/api/admin/users"),
+      fetch(`/api/admin/teams/${teamId}/captains`),
     ]);
     if (teamsRes.ok) {
       const all = (await teamsRes.json()) as Team[];
@@ -59,6 +63,10 @@ export default function AdminTeamDetailPage() {
       const data = (await usersRes.json()) as { items: UserRow[] };
       setUsers(data.items);
     }
+    if (captainsRes.ok) {
+      const data = (await captainsRes.json()) as { captains: CaptainRow[] };
+      setCaptains(data.captains);
+    }
   }, [teamId]);
 
   useEffect(() => {
@@ -72,9 +80,13 @@ export default function AdminTeamDetailPage() {
     }
   }, [team]);
 
+  const activeCaptainIds = new Set(captains.map((c) => c.userId));
+  const assignableUsers = users.filter((u) => !activeCaptainIds.has(u.id));
+
   async function saveMetadata(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setMessage(null);
     const res = await fetch(`/api/admin/teams/${teamId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -92,6 +104,7 @@ export default function AdminTeamDetailPage() {
   async function deactivate() {
     if (!window.confirm("Deactivate this team? New applications will be blocked.")) return;
     setError(null);
+    setMessage(null);
     const res = await fetch(`/api/admin/teams/${teamId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -109,6 +122,7 @@ export default function AdminTeamDetailPage() {
   async function assignCaptain(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setMessage(null);
     const res = await fetch(`/api/admin/teams/${teamId}/captains`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -121,23 +135,27 @@ export default function AdminTeamDetailPage() {
     }
     setMessage("Captain assigned.");
     setCaptainUserId("");
+    await load();
   }
 
-  async function revokeCaptain(userId: string) {
-    if (!window.confirm("Revoke captain role for this user?")) return;
+  async function revokeCaptain(userId: string, email: string) {
+    if (!window.confirm(`Revoke captain role for ${email}?`)) return;
     setError(null);
+    setMessage(null);
     const res = await fetch(`/api/admin/teams/${teamId}/captains/${userId}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError(typeof data.message === "string" ? data.message : "Revoke failed");
       return;
     }
-    setMessage("Captain revoked.");
+    setMessage(`Captain role revoked for ${email}.`);
+    await load();
   }
 
   async function endMembership(membershipId: string) {
     if (!window.confirm("Remove this member from the active roster?")) return;
     setError(null);
+    setMessage(null);
     const res = await fetch(`/api/admin/teams/${teamId}/memberships/${membershipId}/end`, {
       method: "POST",
     });
@@ -168,6 +186,17 @@ export default function AdminTeamDetailPage() {
         <Link href="/admin/teams">All teams</Link> · <Link href="/me">Account</Link>
       </p>
 
+      {error ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : null}
+      {message ? (
+        <p className="success" role="status">
+          {message}
+        </p>
+      ) : null}
+
       <section aria-labelledby="edit-team-heading">
         <h2 id="edit-team-heading">Edit metadata</h2>
         <form onSubmit={saveMetadata}>
@@ -192,42 +221,51 @@ export default function AdminTeamDetailPage() {
         ) : null}
       </section>
 
-      <section aria-labelledby="captain-heading">
-        <h2 id="captain-heading">Assign captain</h2>
-        <form onSubmit={assignCaptain}>
-          <label htmlFor="captain-user">User</label>
-          <select
-            id="captain-user"
-            value={captainUserId}
-            onChange={(e) => setCaptainUserId(e.target.value)}
-            required
-          >
-            <option value="">Select user…</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.email}
-              </option>
+      <section className="stack" aria-labelledby="captain-heading">
+        <h2 id="captain-heading">Team captains</h2>
+        {captains.length === 0 ? (
+          <p id="captains-empty">No captains assigned yet.</p>
+        ) : (
+          <ul aria-labelledby="captain-heading">
+            {captains.map((c) => (
+              <li key={c.userId}>
+                {c.email}{" "}
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void revokeCaptain(c.userId, c.email)}
+                >
+                  Revoke captain
+                </button>
+              </li>
             ))}
-          </select>{" "}
-          <button type="submit">Assign captain</button>
-        </form>
-        <p>
-          <small>Revoke: use user id from roster or users list with DELETE API (UI: enter id)</small>
-        </p>
-        <p>
-          <label htmlFor="revoke-captain-id">Revoke captain user id</label>{" "}
-          <button
-            type="button"
-            onClick={() => {
-              const el = document.getElementById("revoke-captain-id") as HTMLInputElement;
-              if (el?.value) void revokeCaptain(el.value);
-            }}
-          >
-            Revoke
-          </button>
-          <br />
-          <input id="revoke-captain-id" aria-label="Captain user id to revoke" />
-        </p>
+          </ul>
+        )}
+
+        <h3 id="assign-captain-heading">Assign captain</h3>
+        {assignableUsers.length === 0 ? (
+          <p id="assign-captain-empty">All listed users are already captains for this team.</p>
+        ) : (
+          <form className="stack" onSubmit={assignCaptain} aria-labelledby="assign-captain-heading">
+            <div className="field">
+              <label htmlFor="captain-user">User</label>
+              <select
+                id="captain-user"
+                value={captainUserId}
+                onChange={(e) => setCaptainUserId(e.target.value)}
+                required
+              >
+                <option value="">Select user…</option>
+                {assignableUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button type="submit">Assign captain</button>
+          </form>
+        )}
       </section>
 
       <section aria-labelledby="roster-heading">
@@ -255,12 +293,6 @@ export default function AdminTeamDetailPage() {
         </ul>
       </section>
 
-      {error ? (
-        <p role="alert" style={{ color: "crimson" }}>
-          {error}
-        </p>
-      ) : null}
-      {message ? <p role="status">{message}</p> : null}
     </main>
   );
 }

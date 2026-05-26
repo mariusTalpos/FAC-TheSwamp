@@ -1,6 +1,23 @@
 import { problemJson } from "@/lib/api/problem-json";
 import type { MembershipServiceError } from "@/lib/teams/membership-service";
 
+export type CaptainAssignError = "not_found" | "already_captain";
+
+export function captainAssignErrorResponse(error: CaptainAssignError) {
+  switch (error) {
+    case "not_found":
+      return { status: 404, body: problemJson("not_found", "User not found") };
+    case "already_captain":
+      return {
+        status: 409,
+        body: problemJson(
+          "conflict",
+          "This user is already an active captain for this team.",
+        ),
+      };
+  }
+}
+
 export function membershipErrorResponse(error: MembershipServiceError) {
   switch (error) {
     case "team_not_found":

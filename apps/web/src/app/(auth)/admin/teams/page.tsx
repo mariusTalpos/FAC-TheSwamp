@@ -60,6 +60,7 @@ export default function AdminTeamsPage() {
     <main>
       <h1>Teams (FAC admin)</h1>
       <p>
+        <Link href="/admin/teams/overview">Teams overview (table)</Link> ·{" "}
         <Link href="/me">Back to account</Link>
       </p>
 

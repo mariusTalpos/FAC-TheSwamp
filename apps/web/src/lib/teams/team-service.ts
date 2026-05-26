@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   teamCaptainAssignments,
@@ -101,6 +101,32 @@ export async function updateTeam(
   return mapTeam(row);
 }
 
+export type TeamCaptainListItem = {
+  userId: string;
+  email: string;
+  validFrom: string;
+};
+
+export async function listActiveTeamCaptains(teamId: string): Promise<TeamCaptainListItem[]> {
+  const rows = await db
+    .select({
+      userId: teamCaptainAssignments.userId,
+      email: users.email,
+      validFrom: teamCaptainAssignments.validFrom,
+    })
+    .from(teamCaptainAssignments)
+    .innerJoin(users, eq(users.id, teamCaptainAssignments.userId))
+    .where(
+      and(eq(teamCaptainAssignments.teamId, teamId), isNull(teamCaptainAssignments.validTo)),
+    );
+
+  return rows.map((row) => ({
+    userId: row.userId,
+    email: row.email,
+    validFrom: row.validFrom.toISOString(),
+  }));
+}
+
 export async function assignTeamCaptain(
   teamId: string,
   userId: string,
@@ -108,6 +134,10 @@ export async function assignTeamCaptain(
 ) {
   const [user] = await db.select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
   if (!user) return { error: "not_found" as const };
+
+  if (await userIsActiveCaptainOfTeam(teamId, userId)) {
+    return { error: "already_captain" as const };
+  }
 
   const [row] = await db
     .insert(teamCaptainAssignments)
