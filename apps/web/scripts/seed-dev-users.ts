@@ -48,6 +48,18 @@ const DEV_USERS: DevUserSpec[] = [
     roleKeys: [],
     fighter: { displayName: "Plain Fighter", complete: true },
   },
+  {
+    email: "captain@fac.test",
+    name: "Team Captain",
+    roleKeys: [],
+    fighter: { displayName: "Captain Casey", complete: true },
+  },
+  {
+    email: "hybrid-marshal@fac.test",
+    name: "Marshal + Fighter Hybrid",
+    roleKeys: ["marshal"],
+    fighter: { displayName: "Hybrid Hal", complete: true },
+  },
 ];
 
 async function upsertUser(spec: DevUserSpec, passwordHash: string): Promise<string> {
@@ -184,7 +196,9 @@ async function main() {
   console.log("  - fighter@fac.test  → own profile only, admin APIs 403\n");
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

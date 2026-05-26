@@ -25,7 +25,9 @@ async function main() {
   console.log(`Seeded operational_role rows: ${all.length}`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main()
+  .then(() => process.exit(0))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

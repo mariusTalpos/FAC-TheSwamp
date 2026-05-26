@@ -1,0 +1,706 @@
+openapi: 3.0.3
+info:
+  title: FAC-App — Teams & Rosters API
+  version: 0.1.0
+  description: >
+    Contract sketch for Epic E2. Builds on E1 foundation OpenAPI semantics.
+    Paths may be implemented under `/api` via Next Route Handlers.
+
+servers:
+  - url: https://api.example.com
+    description: Production (placeholder)
+
+tags:
+  - name: Teams
+  - name: Membership
+  - name: Captain
+  - name: AdminTeams
+  - name: PublicTeams
+
+paths:
+  /admin/teams:
+    post:
+      tags: [AdminTeams]
+      summary: Create team (FAC admin)
+      operationId: adminCreateTeam
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamCreateRequest'
+      responses:
+        '201':
+          description: Team created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      tags: [AdminTeams]
+      summary: List teams (FAC admin)
+      operationId: adminListTeams
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Team list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeamResponse'
+
+  /admin/teams/{teamId}:
+    patch:
+      tags: [AdminTeams]
+      summary: Update team metadata or status (FAC admin)
+      operationId: adminUpdateTeam
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamUpdateRequest'
+      responses:
+        '200':
+          description: Updated team
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/teams/{teamId}/captains:
+    post:
+      tags: [AdminTeams]
+      summary: Assign team captain (FAC admin)
+      operationId: adminAssignTeamCaptain
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamCaptainAssignRequest'
+      responses:
+        '201':
+          description: Captain assigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamCaptainResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/teams/{teamId}/captains/{userId}:
+    delete:
+      tags: [AdminTeams]
+      summary: Revoke team captain (FAC admin)
+      operationId: adminRevokeTeamCaptain
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+        - $ref: '#/components/parameters/userId'
+      responses:
+        '204':
+          description: Captain revoked
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Last captain guard
+
+  /admin/teams/{teamId}/roster:
+    get:
+      tags: [AdminTeams]
+      summary: Active roster for team (FAC admin)
+      operationId: adminGetTeamRoster
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      responses:
+        '200':
+          description: Active members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamRosterResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/teams/{teamId}/memberships/history:
+    get:
+      tags: [AdminTeams]
+      summary: Membership history for team (FAC admin)
+      operationId: adminListMembershipHistory
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      responses:
+        '200':
+          description: Ended and rejected memberships with date bounds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMembershipHistoryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/teams/{teamId}/memberships/{membershipId}/end:
+    post:
+      tags: [AdminTeams]
+      summary: FAC admin end active membership (remove from roster)
+      operationId: adminEndMembership
+      description: >
+        Ends an active membership (status active → ended). FR-006/FR-007 admin roster
+        removal. Transfer between teams is not one call: end on source team, then
+        apply and approve (or admin decide) on destination team.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+        - $ref: '#/components/parameters/membershipId'
+      responses:
+        '200':
+          description: Membership ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMembershipResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Membership not found or not active
+
+  /admin/teams/{teamId}/memberships/{membershipId}/decide:
+    post:
+      tags: [AdminTeams]
+      summary: FAC admin approve or reject pending membership (override)
+      operationId: adminDecideMembership
+      description: >
+        Pending applications only (approve/reject). Does not end active memberships;
+        use POST /admin/teams/{teamId}/memberships/{membershipId}/end for roster removal.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+        - $ref: '#/components/parameters/membershipId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipDecisionRequest'
+      responses:
+        '200':
+          description: Membership updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMembershipResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /teams:
+    get:
+      tags: [Teams]
+      summary: List teams available for application (authenticated)
+      operationId: listTeamsForApply
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Active teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeamSummary'
+
+  /me/team-affiliation:
+    get:
+      tags: [Membership]
+      summary: Current user fighter/squire affiliation summary
+      operationId: getMyTeamAffiliation
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Affiliation summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserAffiliationSummary'
+
+  /me/team-memberships/apply:
+    post:
+      tags: [Membership]
+      summary: Apply to join a team as fighter or squire
+      operationId: applyToTeam
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamApplyRequest'
+      responses:
+        '201':
+          description: Pending membership created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMembershipResponse'
+        '400':
+          description: Dual affiliation or team deactivated
+        '409':
+          description: Duplicate pending application
+
+  /me/teams/{teamId}/roster:
+    get:
+      tags: [Membership]
+      summary: Active roster for user's affiliated team (active members only)
+      operationId: memberGetTeamRoster
+      description: >
+        Returns the same TeamRosterResponse as captain/admin roster routes,
+        filtered to status = active. Caller MUST have active membership on
+        teamId (fighter or squire). Pending and rejected applicants are excluded.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      responses:
+        '200':
+          description: Active (approved) members on the team
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamRosterResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /captain/teams/{teamId}/pending:
+    get:
+      tags: [Captain]
+      summary: Pending applications for captain's team
+      operationId: captainListPending
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      responses:
+        '200':
+          description: Pending queue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TeamMembershipResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /captain/teams/{teamId}/memberships/{membershipId}/decide:
+    post:
+      tags: [Captain]
+      summary: Captain approve or reject application
+      operationId: captainDecideMembership
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+        - $ref: '#/components/parameters/membershipId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipDecisionRequest'
+      responses:
+        '200':
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMembershipResponse'
+        '403':
+          description: Not captain, wrong team, or self-approval blocked
+        '409':
+          description: Requires FAC admin (e.g. captain self-application)
+
+  /captain/teams/{teamId}/roster:
+    get:
+      tags: [Captain]
+      summary: Active roster for team (team captain or FAC admin)
+      operationId: captainGetRoster
+      description: >
+        FAC administrators MAY use this route or GET /admin/teams/{teamId}/roster;
+        both return the same TeamRosterResponse projection.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      responses:
+        '200':
+          description: Active members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamRosterResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /captain/teams/{teamId}/memberships/history:
+    get:
+      tags: [Captain]
+      summary: Membership history for captain's team
+      operationId: captainListMembershipHistory
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      responses:
+        '200':
+          description: Ended and rejected memberships for this team
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMembershipHistoryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /captain/teams/{teamId}/memberships/{membershipId}/end:
+    post:
+      tags: [Captain]
+      summary: End active membership (remove from roster)
+      operationId: captainEndMembership
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+        - $ref: '#/components/parameters/membershipId'
+      responses:
+        '200':
+          description: Membership ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeamMembershipResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /public/teams/{teamId}:
+    get:
+      tags: [PublicTeams]
+      summary: Public team summary (optional FAC policy)
+      operationId: getPublicTeam
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      responses:
+        '200':
+          description: Public team card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicTeamResponse'
+        '404':
+          description: Public access disabled or unknown team
+
+  /public/teams/{teamId}/roster:
+    get:
+      tags: [PublicTeams]
+      summary: Public active roster (optional FAC policy)
+      operationId: getPublicTeamRoster
+      parameters:
+        - $ref: '#/components/parameters/teamId'
+      responses:
+        '200':
+          description: Public roster projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicTeamRosterResponse'
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: authjs.session-token
+
+  parameters:
+    teamId:
+      name: teamId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    userId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+    membershipId:
+      name: membershipId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Forbidden:
+      description: Permission denied (audit when applicable)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [title, status]
+      properties:
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+
+    TeamCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+        region:
+          type: string
+        tierOrDivision:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        contactPhone:
+          type: string
+
+    TeamUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        region:
+          type: string
+        tierOrDivision:
+          type: string
+        contactEmail:
+          type: string
+          format: email
+        contactPhone:
+          type: string
+        status:
+          type: string
+          enum: [active, deactivated]
+
+    TeamSummary:
+      type: object
+      required: [id, name, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        region:
+          type: string
+        status:
+          type: string
+
+    TeamResponse:
+      allOf:
+        - $ref: '#/components/schemas/TeamSummary'
+        - type: object
+          properties:
+            slug:
+              type: string
+            tierOrDivision:
+              type: string
+            contactEmail:
+              type: string
+              format: email
+            contactPhone:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+
+    TeamCaptainAssignRequest:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: string
+
+    TeamCaptainResponse:
+      type: object
+      required: [teamId, userId, validFrom]
+      properties:
+        teamId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        validFrom:
+          type: string
+          format: date-time
+
+    TeamApplyRequest:
+      type: object
+      required: [teamId, memberKind]
+      properties:
+        teamId:
+          type: string
+          format: uuid
+        memberKind:
+          type: string
+          enum: [fighter, squire]
+
+    MembershipDecisionRequest:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [approve, reject]
+        note:
+          type: string
+
+    TeamMembershipResponse:
+      type: object
+      required: [id, teamId, userId, memberKind, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        teamId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        memberKind:
+          type: string
+          enum: [fighter, squire]
+        status:
+          type: string
+          enum: [pending, active, rejected, ended]
+        requestedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        applicantDisplayName:
+          type: string
+          description: Projection from fighter profile when present
+
+    TeamRosterResponse:
+      type: object
+      required: [teamId, members]
+      properties:
+        teamId:
+          type: string
+          format: uuid
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMembershipResponse'
+
+    TeamMembershipHistoryResponse:
+      type: object
+      required: [teamId, memberships]
+      properties:
+        teamId:
+          type: string
+          format: uuid
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/TeamMembershipResponse'
+          description: Rows with status ended or rejected, including started_at/ended_at/decided_at bounds
+
+    UserAffiliationSummary:
+      type: object
+      properties:
+        fighter:
+          $ref: '#/components/schemas/AffiliationSlot'
+        squire:
+          $ref: '#/components/schemas/AffiliationSlot'
+
+    AffiliationSlot:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [unaffiliated, pending, active]
+        teamId:
+          type: string
+          format: uuid
+        teamName:
+          type: string
+        membershipId:
+          type: string
+          format: uuid
+
+    PublicTeamResponse:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        region:
+          type: string
+
+    PublicTeamRosterResponse:
+      type: object
+      properties:
+        teamId:
+          type: string
+          format: uuid
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              displayName:
+                type: string
+              memberKind:
+                type: string
