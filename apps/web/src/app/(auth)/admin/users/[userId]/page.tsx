@@ -32,6 +32,10 @@ export default async function AdminUserDetailPage({
           <p>
             Display name: <strong>{fp.displayName}</strong>
           </p>
+          <p>
+            Ring name: <strong>{fp.ringName?.trim() ? fp.ringName : "—"}</strong>
+            {fp.visibility?.ringName?.public === false ? " (hidden from public)" : null}
+          </p>
           <p>Completion: {fp.completionState}</p>
           <pre style={{ fontSize: "0.85rem", overflow: "auto" }}>
             {JSON.stringify(fp.visibility ?? {}, null, 2)}

@@ -47,6 +47,14 @@ export function membershipErrorResponse(error: MembershipServiceError) {
         status: 403,
         body: problemJson("forbidden", "Squire operational role is required to apply as squire."),
       };
+    case "fighter_profile_required":
+      return {
+        status: 403,
+        body: problemJson(
+          "forbidden",
+          "A fighter profile is required to apply to a team as a fighter.",
+        ),
+      };
     case "self_approval":
       return {
         status: 409,

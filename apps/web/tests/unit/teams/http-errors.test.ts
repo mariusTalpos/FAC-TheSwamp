@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { captainAssignErrorResponse } from "@/lib/teams/http-errors";
+import {
+  captainAssignErrorResponse,
+  membershipErrorResponse,
+} from "@/lib/teams/http-errors";
 
 describe("captainAssignErrorResponse", () => {
   it("maps already_captain to 409 conflict", () => {
@@ -13,5 +16,13 @@ describe("captainAssignErrorResponse", () => {
     const res = captainAssignErrorResponse("not_found");
     expect(res.status).toBe(404);
     expect(res.body.code).toBe("not_found");
+  });
+});
+
+describe("membershipErrorResponse", () => {
+  it("maps fighter_profile_required to 403", () => {
+    const res = membershipErrorResponse("fighter_profile_required");
+    expect(res.status).toBe(403);
+    expect(res.body.message).toContain("fighter profile");
   });
 });

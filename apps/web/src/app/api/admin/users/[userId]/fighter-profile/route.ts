@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { fighterProfiles } from "@/lib/db/schema";
 import { requireFacAdmin } from "@/lib/rbac/require-fac-admin";
+import { toFighterProfilePrivate } from "@/lib/profile/fighter-profile-private";
 import { problemJson } from "@/lib/api/problem-json";
 
 export async function GET(
@@ -26,10 +27,5 @@ export async function GET(
     });
   }
 
-  return NextResponse.json({
-    id: fp.id,
-    completionState: fp.completionState,
-    displayName: fp.displayName,
-    visibility: fp.visibility ?? {},
-  });
+  return NextResponse.json(toFighterProfilePrivate(fp));
 }

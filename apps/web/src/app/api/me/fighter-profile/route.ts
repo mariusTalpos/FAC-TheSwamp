@@ -5,6 +5,11 @@ import { fighterProfilePatchSchema } from "@/lib/auth/contracts";
 import { db } from "@/lib/db";
 import { fighterProfiles } from "@/lib/db/schema";
 import { insertAuditEvent } from "@/lib/audit/write-audit-event";
+import {
+  normalizeRingNameVisibility,
+  toFighterProfilePrivate,
+  validateRingNamePublicVisibility,
+} from "@/lib/profile/fighter-profile-private";
 import { deriveCompletionState } from "@/lib/profile/minimum-policy";
 import { mergeVisibility, visibilityDelta } from "@/lib/profile/visibility";
 import { problemJson, zodToProblemJson } from "@/lib/api/problem-json";
@@ -27,12 +32,7 @@ export async function GET() {
     });
   }
 
-  return NextResponse.json({
-    id: fp.id,
-    completionState: fp.completionState,
-    displayName: fp.displayName,
-    visibility: fp.visibility ?? {},
-  });
+  return NextResponse.json(toFighterProfilePrivate(fp));
 }
 
 export async function PATCH(req: Request) {
@@ -65,12 +65,21 @@ export async function PATCH(req: Request) {
     });
   }
 
-  const nextVisibility = mergeVisibility(before.visibility ?? {}, parsed.data.visibility);
   const nextDisplayName =
     parsed.data.displayName !== undefined ? parsed.data.displayName : before.displayName;
 
   const nextRingName =
     parsed.data.ringName !== undefined ? parsed.data.ringName : before.ringName;
+
+  let nextVisibility = normalizeRingNameVisibility(
+    nextRingName,
+    mergeVisibility(before.visibility ?? {}, parsed.data.visibility),
+  );
+
+  const visibilityError = validateRingNamePublicVisibility(nextRingName, nextVisibility);
+  if (visibilityError) {
+    return NextResponse.json(problemJson("validation_error", visibilityError), { status: 400 });
+  }
 
   const completionState = deriveCompletionState({
     displayName: nextDisplayName,
@@ -105,10 +114,5 @@ export async function PATCH(req: Request) {
     .where(eq(fighterProfiles.id, before.id))
     .limit(1);
 
-  return NextResponse.json({
-    id: fp!.id,
-    completionState: fp!.completionState,
-    displayName: fp!.displayName,
-    visibility: fp!.visibility ?? {},
-  });
+  return NextResponse.json(toFighterProfilePrivate(fp!));
 }
