@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { TimezoneSelect } from "@/components/timezone-select";
 import type { EventResponse } from "@/lib/events/contracts";
+import { DEFAULT_EVENT_TIMEZONE } from "@/lib/events/timezone-options";
 
 export default function OrganizerEventsPage() {
   const [events, setEvents] = useState<EventResponse[]>([]);
   const [name, setName] = useState("");
-  const [timezone, setTimezone] = useState("America/New_York");
+  const [timezone, setTimezone] = useState(DEFAULT_EVENT_TIMEZONE);
   const [startsAt, setStartsAt] = useState("");
   const [venueLabel, setVenueLabel] = useState("");
   const [description, setDescription] = useState("");
@@ -75,12 +77,13 @@ export default function OrganizerEventsPage() {
             <input id="event-name" required value={name} onChange={(e) => setName(e.target.value)} />
           </p>
           <p>
-            <label htmlFor="event-timezone">Timezone (IANA)</label>
+            <label htmlFor="event-timezone">Event timezone</label>
             <br />
-            <input
+            <TimezoneSelect
               id="event-timezone"
               value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
+              onChange={setTimezone}
+              required
             />
           </p>
           <p>

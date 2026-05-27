@@ -8,6 +8,10 @@ import type {
   EventScheduleResponse,
   MyEventRegistrationsResponse,
 } from "@/lib/events/contracts";
+import {
+  staffRegistrationRoleLabel,
+  staffRegistrationRoleOptions,
+} from "@/lib/events/staff-registration-roles";
 
 export default function EventDetailPage() {
   const { eventId } = useParams<{ eventId: string }>();
@@ -16,17 +20,27 @@ export default function EventDetailPage() {
   const [schedule, setSchedule] = useState<EventScheduleResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [staffRole, setStaffRole] = useState("marshal");
+  const [staffRoleOptions, setStaffRoleOptions] = useState<string[]>([]);
+  const [staffRole, setStaffRole] = useState("");
 
   const load = useCallback(async () => {
-    const [evRes, regRes, schedRes] = await Promise.all([
+    const [evRes, regRes, schedRes, meRes] = await Promise.all([
       fetch(`/api/events/${eventId}`),
       fetch(`/api/events/${eventId}/registrations/me`),
       fetch(`/api/events/${eventId}/schedule`),
+      fetch("/api/me"),
     ]);
     if (evRes.ok) setEvent((await evRes.json()) as EventResponse);
     if (regRes.ok) setRegs((await regRes.json()) as MyEventRegistrationsResponse);
     if (schedRes.ok) setSchedule((await schedRes.json()) as EventScheduleResponse);
+    if (meRes.ok) {
+      const me = (await meRes.json()) as { roleKeys?: string[] };
+      const options = staffRegistrationRoleOptions(me.roleKeys ?? []);
+      setStaffRoleOptions(options);
+      setStaffRole((current) =>
+        current && options.includes(current) ? current : (options[0] ?? ""),
+      );
+    }
   }, [eventId]);
 
   useEffect(() => {
@@ -75,6 +89,7 @@ export default function EventDetailPage() {
   }
 
   async function registerStaff() {
+    if (!staffRole) return;
     setError(null);
     const res = await fetch(`/api/events/${eventId}/registrations/staff`, {
       method: "POST",
@@ -148,23 +163,38 @@ export default function EventDetailPage() {
         )}
       </section>
 
-      <section aria-labelledby="staff-reg-heading">
-        <h2 id="staff-reg-heading">Staff registration</h2>
-        <label htmlFor="staff-role">Operational role key</label>{" "}
-        <input id="staff-role" value={staffRole} onChange={(e) => setStaffRole(e.target.value)} />
-        <button type="button" onClick={() => void registerStaff()}>
-          Register as staff
-        </button>
-        {regs?.staff?.length ? (
-          <ul>
-            {regs.staff.map((s) => (
-              <li key={s.id}>
-                {s.staffOperationalRoleKey}: {s.status}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
+      {staffRoleOptions.length > 0 ? (
+        <section aria-labelledby="staff-reg-heading">
+          <h2 id="staff-reg-heading">Staff registration</h2>
+          <p>
+            <label htmlFor="staff-role">Staff role</label>
+            <br />
+            <select
+              id="staff-role"
+              value={staffRole}
+              onChange={(e) => setStaffRole(e.target.value)}
+            >
+              {staffRoleOptions.map((key) => (
+                <option key={key} value={key}>
+                  {staffRegistrationRoleLabel(key)}
+                </option>
+              ))}
+            </select>
+          </p>
+          <button type="button" onClick={() => void registerStaff()} disabled={!staffRole}>
+            Register as staff
+          </button>
+          {regs?.staff?.length ? (
+            <ul>
+              {regs.staff.map((s) => (
+                <li key={s.id}>
+                  {staffRegistrationRoleLabel(s.staffOperationalRoleKey ?? "")}: {s.status}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
 
       <section aria-labelledby="schedule-heading">
         <h2 id="schedule-heading">Schedule ({schedule?.timezone ?? event.timezone})</h2>

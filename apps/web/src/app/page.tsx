@@ -1,6 +1,10 @@
 import Link from "next/link";
+import { auth } from "@/lib/auth/auth.config";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const session = await auth();
+  const isAdmin = session?.user.roleKeys?.includes("fac_admin");
+
   return (
     <main>
       <h1>FAC-App</h1>
@@ -12,12 +16,16 @@ export default function HomePage() {
         <li>
           <Link href="/login">Sign in</Link>
         </li>
-        <li>
-          <Link href="/me">Account home</Link>
-        </li>
-        <li>
-          <Link href="/admin/users">Admin — users</Link>
-        </li>
+        {session?.user ? (
+          <li>
+            <Link href="/me">Account home</Link>
+          </li>
+        ) : null}
+        {isAdmin ? (
+          <li>
+            <Link href="/admin/users">Admin — users</Link>
+          </li>
+        ) : null}
       </ul>
     </main>
   );
