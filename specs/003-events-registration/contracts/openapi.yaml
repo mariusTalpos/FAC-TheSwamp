@@ -1,0 +1,1088 @@
+openapi: 3.0.3
+info:
+  title: FAC-App — Events & Registration API
+  version: 0.1.0
+  description: >
+    Contract sketch for Epic E3. Builds on E1 foundation and E2 teams semantics.
+    Paths implemented under `/api` via Next Route Handlers.
+
+servers:
+  - url: https://api.example.com
+    description: Production (placeholder)
+
+tags:
+  - name: Events
+  - name: EventRegistration
+  - name: EventSchedule
+  - name: AdminEvents
+  - name: PublicEvents
+
+paths:
+  /events:
+    post:
+      tags: [Events]
+      summary: Create event (draft)
+      description: Requires global `organizer` role or `fac_admin`. Creator becomes sole event organizer.
+      operationId: createEvent
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventCreateRequest'
+      responses:
+        '201':
+          description: Event created in draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    get:
+      tags: [Events]
+      summary: List upcoming published events (authenticated)
+      operationId: listPublishedEvents
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Event list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventListItem'
+
+  /events/{eventId}:
+    get:
+      tags: [Events]
+      summary: Get event detail
+      operationId: getEvent
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Event detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Events]
+      summary: Update event metadata (draft or published per policy)
+      operationId: updateEvent
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventUpdateRequest'
+      responses:
+        '200':
+          description: Updated event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/publish:
+    post:
+      tags: [Events]
+      summary: Publish event with registration open
+      operationId: publishEvent
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventPublishRequest'
+      responses:
+        '200':
+          description: Published event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/close-registration:
+    post:
+      tags: [Events]
+      summary: Close registration for event
+      operationId: closeEventRegistration
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Registration closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/start:
+    post:
+      tags: [Events]
+      summary: Mark event in progress
+      description: Event organizer (owner) or FAC admin only.
+      operationId: startEvent
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Event marked in progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/complete:
+    post:
+      tags: [Events]
+      summary: Mark event completed
+      description: Event organizer (owner) or FAC admin only.
+      operationId: completeEvent
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Event marked completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/cancel:
+    post:
+      tags: [Events]
+      summary: Cancel event and cascade registration cancellation
+      operationId: cancelEvent
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventCancelRequest'
+      responses:
+        '200':
+          description: Event cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/events/{eventId}/sanction:
+    post:
+      tags: [AdminEvents]
+      summary: Mark event sanctioned (FAC admin)
+      operationId: sanctionEvent
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventSanctionRequest'
+      responses:
+        '200':
+          description: Event sanctioned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    delete:
+      tags: [AdminEvents]
+      summary: Revoke event sanctioning (FAC admin)
+      operationId: revokeEventSanction
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Sanction revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/events/{eventId}/organizer:
+    post:
+      tags: [AdminEvents]
+      summary: Reassign event organizer (FAC admin)
+      operationId: reassignEventOrganizer
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventOrganizerReassignRequest'
+      responses:
+        '200':
+          description: Organizer reassigned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Target user lacks global organizer role
+
+  /events/{eventId}/registrations/me:
+    get:
+      tags: [EventRegistration]
+      summary: Current user's registrations for event
+      operationId: getMyEventRegistrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Registrations for session user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MyEventRegistrationsResponse'
+
+  /events/{eventId}/registrations:
+    get:
+      tags: [EventRegistration]
+      summary: Registration summary (event organizer or FAC admin)
+      operationId: listEventRegistrations
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+        - name: kind
+          in: query
+          schema:
+            $ref: '#/components/schemas/RegistrationKind'
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/RegistrationStatus'
+      responses:
+        '200':
+          description: Registration lists and counts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRegistrationSummaryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/registrations/fighter:
+    post:
+      tags: [EventRegistration]
+      summary: Fighter self-registration
+      operationId: registerFighterForEvent
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '201':
+          description: Registration created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRegistrationResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Duplicate registration or registration closed
+
+  /events/{eventId}/registrations/fighter/withdraw:
+    post:
+      tags: [EventRegistration]
+      summary: Fighter withdraw own registration
+      operationId: withdrawFighterRegistration
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Registration withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRegistrationResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/registrations/fighter/confirm:
+    post:
+      tags: [EventRegistration]
+      summary: Fighter confirms attendance (when required)
+      operationId: confirmFighterAttendance
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Attendance confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRegistrationResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Confirmation not allowed (e.g. too late, not required, or no registration)
+
+  /events/{eventId}/registrations/fighter/on-behalf:
+    post:
+      tags: [EventRegistration]
+      summary: Register fighter on behalf (organizer or FAC admin)
+      operationId: registerFighterOnBehalf
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FighterOnBehalfRequest'
+      responses:
+        '201':
+          description: Registration created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRegistrationResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/registrations/staff:
+    post:
+      tags: [EventRegistration]
+      summary: Staff self-registration (e.g. marshal)
+      operationId: registerStaffForEvent
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffRegistrationRequest'
+      responses:
+        '201':
+          description: Staff registration created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRegistrationResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/registrations/staff/withdraw:
+    post:
+      tags: [EventRegistration]
+      summary: Withdraw own staff registration
+      operationId: withdrawStaffRegistration
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffRegistrationRequest'
+      responses:
+        '200':
+          description: Staff registration withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRegistrationResponse'
+
+  /events/{eventId}/registrations/{registrationId}/withdraw:
+    post:
+      tags: [EventRegistration]
+      summary: Organizer or FAC admin withdraw a registration
+      operationId: withdrawRegistrationByOrganizer
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+        - $ref: '#/components/parameters/registrationId'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegistrationWithdrawRequest'
+      responses:
+        '200':
+          description: Registration withdrawn
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventRegistrationResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/schedule:
+    get:
+      tags: [EventSchedule]
+      summary: Get current planned schedule board
+      operationId: getEventSchedule
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Schedule entries in chronological order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventScheduleResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/schedule/entries:
+    post:
+      tags: [EventSchedule]
+      summary: Add schedule entry
+      operationId: createScheduleEntry
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleEntryCreateRequest'
+      responses:
+        '201':
+          description: Schedule entry created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleEntryResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/schedule/entries/{entryId}:
+    patch:
+      tags: [EventSchedule]
+      summary: Update schedule entry (writes change log)
+      operationId: updateScheduleEntry
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+        - $ref: '#/components/parameters/entryId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleEntryUpdateRequest'
+      responses:
+        '200':
+          description: Updated entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleEntryUpdateResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /events/{eventId}/schedule/changes:
+    get:
+      tags: [EventSchedule]
+      summary: Schedule change history (FAC admin or event organizer)
+      operationId: listScheduleChanges
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Ordered change log
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScheduleChangeRecord'
+
+  /public/events:
+    get:
+      tags: [PublicEvents]
+      summary: List public event metadata (feature-flagged)
+      operationId: listPublicEvents
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Public event list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PublicEventListItem'
+        '404':
+          description: Public events disabled
+
+  /public/events/{eventId}:
+    get:
+      tags: [PublicEvents]
+      summary: Public event metadata (feature-flagged)
+      operationId: getPublicEvent
+      parameters:
+        - $ref: '#/components/parameters/eventId'
+      responses:
+        '200':
+          description: Public event detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicEventListItem'
+        '404':
+          description: Not found or public events disabled
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: authjs.session-token
+
+  parameters:
+    eventId:
+      name: eventId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    registrationId:
+      name: registrationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    entryId:
+      name: entryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+
+    EventLifecycleStatus:
+      type: string
+      enum: [draft, published, registration_closed, in_progress, completed, cancelled]
+
+    RegistrationKind:
+      type: string
+      enum: [fighter, staff]
+
+    RegistrationStatus:
+      type: string
+      enum: [submitted, confirmed, waitlisted, withdrawn, cancelled]
+
+    ScheduleEntryStatus:
+      type: string
+      enum: [planned, delayed, cancelled]
+
+    EventCreateRequest:
+      type: object
+      required: [name, timezone, startsAt, venueLabel]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        timezone:
+          type: string
+          example: America/New_York
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        venueLabel:
+          type: string
+        registrationOpensAt:
+          type: string
+          format: date-time
+        registrationClosesAt:
+          type: string
+          format: date-time
+        fighterCapacity:
+          type: integer
+          minimum: 1
+        staffCapacity:
+          type: object
+          description: 'Optional per-role caps (operational_role.key -> cap), e.g. {"marshal": 20}'
+          additionalProperties:
+            type: integer
+            minimum: 0
+        fighterConfirmationRequiredDaysBefore:
+          type: integer
+          minimum: 1
+          description: When set, fighters must confirm attendance by startsAt minus N days.
+
+    EventUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        timezone:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        venueLabel:
+          type: string
+        registrationOpensAt:
+          type: string
+          format: date-time
+        registrationClosesAt:
+          type: string
+          format: date-time
+        fighterCapacity:
+          type: integer
+        staffCapacity:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        fighterConfirmationRequiredDaysBefore:
+          type: integer
+          minimum: 1
+
+    EventPublishRequest:
+      type: object
+      properties:
+        registrationOpensAt:
+          type: string
+          format: date-time
+        registrationClosesAt:
+          type: string
+          format: date-time
+
+    EventCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+
+    EventSanctionRequest:
+      type: object
+      properties:
+        sanctioningNotes:
+          type: string
+
+    EventOrganizerReassignRequest:
+      type: object
+      required: [newOrganizerUserId]
+      properties:
+        newOrganizerUserId:
+          type: string
+
+    EventResponse:
+      type: object
+      required:
+        - id
+        - name
+        - timezone
+        - startsAt
+        - venueLabel
+        - lifecycleStatus
+        - isSanctioned
+        - organizerUserId
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        timezone:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        venueLabel:
+          type: string
+        lifecycleStatus:
+          $ref: '#/components/schemas/EventLifecycleStatus'
+        isSanctioned:
+          type: boolean
+        sanctioningNotes:
+          type: string
+        organizerUserId:
+          type: string
+        registrationOpensAt:
+          type: string
+          format: date-time
+        registrationClosesAt:
+          type: string
+          format: date-time
+        fighterCapacity:
+          type: integer
+        staffCapacity:
+          type: object
+          additionalProperties:
+            type: integer
+        fighterConfirmationRequiredDaysBefore:
+          type: integer
+        publishedAt:
+          type: string
+          format: date-time
+        cancelledAt:
+          type: string
+          format: date-time
+        cancellationReason:
+          type: string
+
+    EventListItem:
+      type: object
+      required: [id, name, startsAt, venueLabel, timezone, lifecycleStatus, isSanctioned]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        venueLabel:
+          type: string
+        timezone:
+          type: string
+        lifecycleStatus:
+          $ref: '#/components/schemas/EventLifecycleStatus'
+        isSanctioned:
+          type: boolean
+
+    PublicEventListItem:
+      type: object
+      required: [id, name, startsAt, venueLabel, timezone]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        venueLabel:
+          type: string
+        timezone:
+          type: string
+
+    FighterOnBehalfRequest:
+      type: object
+      required: [userId]
+      properties:
+        userId:
+          type: string
+
+    StaffRegistrationRequest:
+      type: object
+      required: [operationalRoleKey]
+      properties:
+        operationalRoleKey:
+          type: string
+          example: marshal
+
+    RegistrationWithdrawRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+
+    EventRegistrationResponse:
+      type: object
+      required: [id, eventId, userId, registrationKind, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+        registrationKind:
+          $ref: '#/components/schemas/RegistrationKind'
+        staffOperationalRoleKey:
+          type: string
+        status:
+          $ref: '#/components/schemas/RegistrationStatus'
+        teamId:
+          type: string
+          format: uuid
+        teamNameSnapshot:
+          type: string
+        confirmedAt:
+          type: string
+          format: date-time
+        waitlistedAt:
+          type: string
+          format: date-time
+
+    MyEventRegistrationsResponse:
+      type: object
+      properties:
+        fighter:
+          $ref: '#/components/schemas/EventRegistrationResponse'
+        staff:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventRegistrationResponse'
+
+    EventRegistrationSummaryResponse:
+      type: object
+      properties:
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+        registrations:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventRegistrationResponse'
+
+    ScheduleEntryCreateRequest:
+      type: object
+      required: [label, scheduledStartAt]
+      properties:
+        label:
+          type: string
+        scheduledStartAt:
+          type: string
+          format: date-time
+        scheduledEndAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+        eventRegistrationId:
+          type: string
+          format: uuid
+        placeholderLabel:
+          type: string
+        sortOrder:
+          type: integer
+        acknowledgeScheduleWarnings:
+          type: boolean
+          default: false
+
+    ScheduleEntryUpdateRequest:
+      type: object
+      properties:
+        label:
+          type: string
+        scheduledStartAt:
+          type: string
+          format: date-time
+        scheduledEndAt:
+          type: string
+          format: date-time
+        durationMinutes:
+          type: integer
+        status:
+          $ref: '#/components/schemas/ScheduleEntryStatus'
+        venueLabelOverride:
+          type: string
+        reason:
+          type: string
+        acknowledgeScheduleWarnings:
+          type: boolean
+
+    ScheduleEntryResponse:
+      type: object
+      required: [id, eventId, label, scheduledStartAt, status, sortOrder]
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+          format: uuid
+        label:
+          type: string
+        scheduledStartAt:
+          type: string
+          format: date-time
+        scheduledEndAt:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/ScheduleEntryStatus'
+        venueLabelOverride:
+          type: string
+        eventRegistrationId:
+          type: string
+          format: uuid
+        placeholderLabel:
+          type: string
+        sortOrder:
+          type: integer
+
+    ScheduleEntryUpdateResult:
+      type: object
+      required: [entry]
+      properties:
+        entry:
+          $ref: '#/components/schemas/ScheduleEntryResponse'
+        warnings:
+          type: array
+          items:
+            type: string
+
+    ScheduleChangeRecord:
+      type: object
+      required: [id, scheduleEntryId, fieldName, actorUserId, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        scheduleEntryId:
+          type: string
+          format: uuid
+        fieldName:
+          type: string
+        priorValue:
+          type: string
+        newValue:
+          type: string
+        reason:
+          type: string
+        actorUserId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    EventScheduleResponse:
+      type: object
+      properties:
+        timezone:
+          type: string
+        schedulePublished:
+          type: boolean
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduleEntryResponse'
