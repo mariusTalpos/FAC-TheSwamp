@@ -42,6 +42,14 @@ export function membershipErrorResponse(error: MembershipServiceError) {
         status: 409,
         body: problemJson("conflict", "You already have a pending application for this team."),
       };
+    case "pending_elsewhere":
+      return {
+        status: 409,
+        body: problemJson(
+          "pending_application",
+          "You already have a pending application on another team. Cancel it before applying elsewhere.",
+        ),
+      };
     case "squire_role_required":
       return {
         status: 403,

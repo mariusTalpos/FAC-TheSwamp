@@ -212,6 +212,9 @@ export const teamMemberships = pgTable(
     pendingPerTeamUnique: uniqueIndex("team_membership_user_team_kind_pending")
       .on(t.userId, t.teamId, t.memberKind)
       .where(sql`${t.status} = 'pending'`),
+    pendingPerUserKindUnique: uniqueIndex("team_membership_user_kind_pending")
+      .on(t.userId, t.memberKind)
+      .where(sql`${t.status} = 'pending'`),
   }),
 );
 

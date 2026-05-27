@@ -20,6 +20,7 @@ export type MembershipServiceError =
   | "user_disabled"
   | "dual_affiliation"
   | "duplicate_pending"
+  | "pending_elsewhere"
   | "not_found"
   | "not_pending"
   | "not_active"
@@ -74,20 +75,22 @@ export async function applyToTeam(params: {
     return { error: "duplicate_pending" };
   }
 
-  const [pendingDup] = await db
+  const [pendingOpen] = await db
     .select()
     .from(teamMemberships)
     .where(
       and(
         eq(teamMemberships.userId, params.userId),
-        eq(teamMemberships.teamId, params.teamId),
         eq(teamMemberships.memberKind, params.memberKind),
         eq(teamMemberships.status, "pending"),
       ),
     )
     .limit(1);
 
-  if (pendingDup) return { error: "duplicate_pending" };
+  if (pendingOpen) {
+    if (pendingOpen.teamId === params.teamId) return { error: "duplicate_pending" };
+    return { error: "pending_elsewhere" };
+  }
 
   const [row] = await db
     .insert(teamMemberships)
@@ -112,6 +115,53 @@ export async function applyToTeam(params: {
   });
 
   return { ok: true, membership: await mapMembership(row) };
+}
+
+/** Applicant withdraws their own pending application so they may apply elsewhere. */
+export async function withdrawPendingApplication(params: {
+  userId: string;
+  membershipId: string;
+}): Promise<
+  | { ok: true; membership: TeamMembershipResponse }
+  | { error: MembershipServiceError }
+> {
+  const [row] = await db
+    .select()
+    .from(teamMemberships)
+    .where(eq(teamMemberships.id, params.membershipId))
+    .limit(1);
+
+  if (!row) return { error: "not_found" };
+  if (row.userId !== params.userId) return { error: "forbidden" };
+  if (row.status !== "pending") return { error: "not_pending" };
+
+  const now = new Date();
+  const [updated] = await db
+    .update(teamMemberships)
+    .set({
+      status: "rejected",
+      decidedAt: now,
+      decidedByUserId: params.userId,
+      decisionNote: "Withdrawn by applicant",
+      updatedAt: now,
+    })
+    .where(eq(teamMemberships.id, row.id))
+    .returning();
+
+  await writeTeamAuditEvent({
+    eventType: TEAM_AUDIT_EVENT_TYPES.membershipWithdrawn,
+    actorUserId: params.userId,
+    targetUserId: params.userId,
+    payload: {
+      team_id: row.teamId,
+      membership_id: row.id,
+      member_kind: row.memberKind,
+      status_before: "pending",
+      status_after: "rejected",
+    },
+  });
+
+  return { ok: true, membership: await mapMembership(updated) };
 }
 
 export async function getMembershipById(membershipId: string, teamId: string) {

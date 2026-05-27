@@ -7,6 +7,7 @@ export const TEAM_AUDIT_EVENT_TYPES = {
   captainAssigned: "team_captain.assigned",
   captainRevoked: "team_captain.revoked",
   membershipApplied: "membership.applied",
+  membershipWithdrawn: "membership.withdrawn",
   membershipApproved: "membership.approved",
   membershipRejected: "membership.rejected",
   membershipEnded: "membership.ended",

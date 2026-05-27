@@ -1,40 +1,54 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { teamMemberships, teams } from "@/lib/db/schema";
 import type { AffiliationSlot, TeamMemberKind, UserAffiliationSummary } from "@/lib/teams/contracts";
 
 async function slotForKind(userId: string, memberKind: TeamMemberKind): Promise<AffiliationSlot> {
-  const [latest] = await db
+  const baseWhere = and(
+    eq(teamMemberships.userId, userId),
+    eq(teamMemberships.memberKind, memberKind),
+  );
+
+  const [active] = await db
     .select({
       id: teamMemberships.id,
-      status: teamMemberships.status,
       teamId: teamMemberships.teamId,
       teamName: teams.name,
     })
     .from(teamMemberships)
     .innerJoin(teams, eq(teamMemberships.teamId, teams.id))
-    .where(and(eq(teamMemberships.userId, userId), eq(teamMemberships.memberKind, memberKind)))
-    .orderBy(desc(teamMemberships.updatedAt))
+    .where(and(baseWhere, eq(teamMemberships.status, "active")))
     .limit(1);
 
-  if (!latest) return { status: "unaffiliated" };
-
-  if (latest.status === "active") {
+  if (active) {
     return {
       status: "active",
-      teamId: latest.teamId,
-      teamName: latest.teamName,
-      membershipId: latest.id,
+      teamId: active.teamId,
+      teamName: active.teamName,
+      membershipId: active.id,
     };
   }
-  if (latest.status === "pending") {
+
+  const [pending] = await db
+    .select({
+      id: teamMemberships.id,
+      teamId: teamMemberships.teamId,
+      teamName: teams.name,
+    })
+    .from(teamMemberships)
+    .innerJoin(teams, eq(teamMemberships.teamId, teams.id))
+    .where(and(baseWhere, eq(teamMemberships.status, "pending")))
+    .limit(1);
+
+  if (pending) {
     return {
       status: "pending",
-      teamId: latest.teamId,
-      teamName: latest.teamName,
-      membershipId: latest.id,
+      teamId: pending.teamId,
+      teamName: pending.teamName,
+      membershipId: pending.id,
     };
   }
+
   return { status: "unaffiliated" };
 }
 
