@@ -30,6 +30,18 @@ Epic E1 implementation: Next.js (App Router), PostgreSQL, Drizzle ORM, Auth.js v
 
 Override password: `DEV_SEED_PASSWORD=YourSecret pnpm db:seed-dev`
 
+## Dev environment (Cursor / VS Code)
+
+Run **Tasks: Run Task** → **FAC: Dev** (or bind a shortcut to that task).
+
+Starts three dedicated terminals:
+
+1. **Postgres** — `scripts/dev-postgres.sh` (starts container, waits for `pg_isready`, then `docker compose logs -f`)
+2. **Next.js** — `scripts/dev-web.sh` (waits for port 3000, then signals ready)
+3. **Drizzle Studio** — `scripts/dev-studio.sh`
+
+Postgres starts first; the app and Studio start in parallel once the database is ready (works even if the container was already running). Requires **bash** (Git Bash on Windows). Stop each terminal with the trash icon, or **Terminal: Kill All Terminals**.
+
 ## Scripts
 
 | Script | Purpose |

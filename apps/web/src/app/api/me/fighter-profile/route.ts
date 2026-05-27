@@ -71,7 +71,7 @@ export async function PATCH(req: Request) {
   const nextRingName =
     parsed.data.ringName !== undefined ? parsed.data.ringName : before.ringName;
 
-  let nextVisibility = normalizeRingNameVisibility(
+  const nextVisibility = normalizeRingNameVisibility(
     nextRingName,
     mergeVisibility(before.visibility ?? {}, parsed.data.visibility),
   );

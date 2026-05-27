@@ -52,7 +52,7 @@ export async function POST(
   }
 
   const result = await assignTeamCaptain(teamId, parsed.data.userId, gate.session.user.id);
-  if ("error" in result) {
+  if ("error" in result && result.error) {
     const { status, body } = captainAssignErrorResponse(result.error);
     return NextResponse.json(body, { status });
   }

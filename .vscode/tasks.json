@@ -1,0 +1,121 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev:postgres",
+      "type": "shell",
+      "command": "bash scripts/dev-postgres.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [
+        {
+          "owner": "fac-postgres",
+          "pattern": {
+            "regexp": "^$",
+            "file": 1,
+            "location": 2,
+            "message": 3
+          },
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": {
+              "regexp": "Waiting for Postgres"
+            },
+            "endsPattern": {
+              "regexp": "FAC_POSTGRES_READY"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "fac-dev"
+      }
+    },
+    {
+      "label": "dev:web",
+      "type": "shell",
+      "command": "bash scripts/dev-web.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [
+        {
+          "owner": "fac-web",
+          "pattern": {
+            "regexp": "^$",
+            "file": 1,
+            "location": 2,
+            "message": 3
+          },
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": {
+              "regexp": "FAC_WEB_STARTING"
+            },
+            "endsPattern": {
+              "regexp": "FAC_WEB_READY"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "fac-dev",
+        "focus": true
+      }
+    },
+    {
+      "label": "dev:studio",
+      "type": "shell",
+      "command": "bash scripts/dev-studio.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [
+        {
+          "owner": "fac-studio",
+          "pattern": {
+            "regexp": "^$",
+            "file": 1,
+            "location": 2,
+            "message": 3
+          },
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": {
+              "regexp": "FAC_STUDIO_STARTING"
+            },
+            "endsPattern": {
+              "regexp": "FAC_STUDIO_READY"
+            }
+          }
+        }
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "group": "fac-dev"
+      }
+    },
+    {
+      "label": "dev:web-and-studio",
+      "dependsOn": ["dev:web", "dev:studio"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "FAC: Dev",
+      "dependsOn": ["dev:postgres", "dev:web-and-studio"],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "detail": "Postgres (Docker logs), Next.js, Drizzle Studio"
+    }
+  ]
+}

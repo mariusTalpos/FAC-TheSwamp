@@ -14,6 +14,7 @@
     "db:seed": "tsx scripts/seed-operational-roles.ts",
     "db:seed-dev": "tsx scripts/seed-dev-users.ts",
     "db:seed-teams": "tsx scripts/seed-teams-demo.ts",
+    "db:seed-events": "tsx scripts/seed-events-demo.ts",
     "db:grant-admin": "tsx scripts/grant-fac-admin.ts",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -22,6 +23,7 @@
     "@auth/drizzle-adapter": "^1.7.4",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.38.3",
+    "luxon": "^3.7.2",
     "next": "^15.1.6",
     "next-auth": "^5.0.0-beta.25",
     "nodemailer": "^7.0.7",
@@ -35,6 +37,7 @@
     "@eslint/eslintrc": "^3.2.0",
     "@playwright/test": "^1.49.1",
     "@types/bcryptjs": "^2.4.6",
+    "@types/luxon": "^3.7.1",
     "@types/node": "^22.10.5",
     "@types/nodemailer": "^6.4.17",
     "@types/react": "^19.0.2",

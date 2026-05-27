@@ -18,12 +18,103 @@ type Summary = {
 type Team = { id: string; name: string };
 type RosterMember = { userId: string; memberKind: string; applicantDisplayName?: string };
 
+function AffiliationBlock({
+  title,
+  slot,
+  applyKind,
+  teams,
+  onWithdraw,
+  onApply,
+}: {
+  title: string;
+  slot?: AffiliationSlot;
+  applyKind: "fighter" | "squire";
+  teams: Team[];
+  onWithdraw: (membershipId: string) => Promise<void>;
+  onApply: (teamId: string, memberKind: "fighter" | "squire") => Promise<void>;
+}) {
+  const [selectedTeam, setSelectedTeam] = useState("");
+
+  async function apply(e: React.FormEvent) {
+    e.preventDefault();
+    await onApply(selectedTeam, applyKind);
+    setSelectedTeam("");
+  }
+
+  const status = slot?.status ?? "unaffiliated";
+
+  return (
+    <section aria-labelledby={`${applyKind}-aff-heading`}>
+      <h2 id={`${applyKind}-aff-heading`}>{title}</h2>
+      {status === "unaffiliated" ? (
+        <p>
+          You are <strong>unaffiliated</strong> — not on a team roster yet. Apply to one team at a
+          time; a captain must approve before you appear on the active roster.
+        </p>
+      ) : status === "pending" ? (
+        <>
+          <p>
+            Pending approval on <strong>{slot?.teamName}</strong>. You may only have one open
+            application at a time.
+          </p>
+          {slot?.membershipId ? (
+            <p>
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Cancel your pending application to ${slot.teamName}? You can apply to another team after.`,
+                    )
+                  ) {
+                    void onWithdraw(slot.membershipId!);
+                  }
+                }}
+              >
+                Cancel application
+              </button>
+            </p>
+          ) : null}
+        </>
+      ) : (
+        <p>
+          Active member of <strong>{slot?.teamName}</strong>.
+        </p>
+      )}
+
+      {status === "unaffiliated" ? (
+        <div aria-labelledby={`${applyKind}-apply-heading`}>
+          <h3 id={`${applyKind}-apply-heading`}>Apply to a team</h3>
+          <form onSubmit={apply}>
+            <p>
+              <label htmlFor={`${applyKind}-apply-team`}>Team</label>
+              <br />
+              <select
+                id={`${applyKind}-apply-team`}
+                required
+                value={selectedTeam}
+                onChange={(e) => setSelectedTeam(e.target.value)}
+              >
+                <option value="">Select team…</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </p>
+            <button type="submit">Submit application</button>
+          </form>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export default function TeamAffiliationPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [roster, setRoster] = useState<RosterMember[]>([]);
-  const [selectedTeam, setSelectedTeam] = useState("");
-  const [applyKind, setApplyKind] = useState<"fighter" | "squire">("fighter");
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -51,14 +142,13 @@ export default function TeamAffiliationPage() {
     void load();
   }, [load]);
 
-  async function apply(e: React.FormEvent) {
-    e.preventDefault();
+  async function applyToTeam(teamId: string, memberKind: "fighter" | "squire") {
     setError(null);
     setMessage(null);
     const res = await fetch("/api/me/team-memberships/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ teamId: selectedTeam, memberKind: applyKind }),
+      body: JSON.stringify({ teamId, memberKind }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -69,8 +159,22 @@ export default function TeamAffiliationPage() {
     await load();
   }
 
+  async function withdrawApplication(membershipId: string) {
+    setError(null);
+    setMessage(null);
+    const res = await fetch(`/api/me/team-memberships/${membershipId}/withdraw`, {
+      method: "POST",
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(typeof data.message === "string" ? data.message : "Could not cancel application");
+      return;
+    }
+    setMessage("Application cancelled. You may apply to another team.");
+    await load();
+  }
+
   const fighter = summary?.fighter;
-  const squire = summary?.squire;
 
   return (
     <main>
@@ -79,75 +183,32 @@ export default function TeamAffiliationPage() {
         <Link href="/me">Back to account</Link>
       </p>
 
-      <section aria-labelledby="fighter-aff-heading">
-        <h2 id="fighter-aff-heading">Fighter affiliation</h2>
-        {!fighter || fighter.status === "unaffiliated" ? (
-          <p>
-            You are <strong>unaffiliated</strong> — not on a team roster yet. Apply to a team
-            below; a captain must approve before you appear on the active roster.
-          </p>
-        ) : fighter.status === "pending" ? (
-          <p>
-            Pending approval on <strong>{fighter.teamName}</strong>.
-          </p>
-        ) : (
-          <p>
-            Active member of <strong>{fighter.teamName}</strong>.
-          </p>
-        )}
-      </section>
+      <AffiliationBlock
+        title="Fighter affiliation"
+        slot={fighter}
+        applyKind="fighter"
+        teams={teams}
+        onWithdraw={withdrawApplication}
+        onApply={applyToTeam}
+      />
 
-      {squire ? (
-        <section aria-labelledby="squire-aff-heading">
-          <h2 id="squire-aff-heading">Squire affiliation</h2>
-          {squire.status === "unaffiliated" ? (
-            <p>No active squire team membership.</p>
-          ) : (
-            <p>
-              Squire status: <strong>{squire.status}</strong>
-              {squire.teamName ? ` on ${squire.teamName}` : ""}
-            </p>
-          )}
-        </section>
+      {summary?.squire ? (
+        <AffiliationBlock
+          title="Squire affiliation"
+          slot={summary.squire}
+          applyKind="squire"
+          teams={teams}
+          onWithdraw={withdrawApplication}
+          onApply={applyToTeam}
+        />
       ) : null}
 
-      {(fighter?.status === "unaffiliated" || fighter?.status === "pending") && (
-        <section aria-labelledby="apply-heading">
-          <h2 id="apply-heading">Apply to a team</h2>
-          <form onSubmit={apply}>
-            <p>
-              <label htmlFor="apply-team">Team</label>
-              <br />
-              <select
-                id="apply-team"
-                required
-                value={selectedTeam}
-                onChange={(e) => setSelectedTeam(e.target.value)}
-              >
-                <option value="">Select team…</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </p>
-            <p>
-              <label htmlFor="apply-kind">Apply as</label>
-              <br />
-              <select
-                id="apply-kind"
-                value={applyKind}
-                onChange={(e) => setApplyKind(e.target.value as "fighter" | "squire")}
-              >
-                <option value="fighter">Fighter</option>
-                <option value="squire">Squire</option>
-              </select>
-            </p>
-            <button type="submit">Submit application</button>
-          </form>
-        </section>
-      )}
+      {error ? (
+        <p role="alert" style={{ color: "crimson" }}>
+          {error}
+        </p>
+      ) : null}
+      {message ? <p role="status">{message}</p> : null}
 
       {fighter?.status === "active" && roster.length > 0 ? (
         <section aria-labelledby="peer-roster-heading">
@@ -162,13 +223,6 @@ export default function TeamAffiliationPage() {
           </ul>
         </section>
       ) : null}
-
-      {error ? (
-        <p role="alert" style={{ color: "crimson" }}>
-          {error}
-        </p>
-      ) : null}
-      {message ? <p role="status">{message}</p> : null}
     </main>
   );
 }

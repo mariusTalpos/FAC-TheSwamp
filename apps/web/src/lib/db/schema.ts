@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
+  index,
   integer,
   jsonb,
   pgEnum,
@@ -211,5 +212,144 @@ export const teamMemberships = pgTable(
     pendingPerTeamUnique: uniqueIndex("team_membership_user_team_kind_pending")
       .on(t.userId, t.teamId, t.memberKind)
       .where(sql`${t.status} = 'pending'`),
+    pendingPerUserKindUnique: uniqueIndex("team_membership_user_kind_pending")
+      .on(t.userId, t.memberKind)
+      .where(sql`${t.status} = 'pending'`),
   }),
 );
+
+/** Epic E3 — events & registration */
+export const eventLifecycleStatusEnum = pgEnum("event_lifecycle_status", [
+  "draft",
+  "published",
+  "registration_closed",
+  "in_progress",
+  "completed",
+  "cancelled",
+]);
+
+export const eventRegistrationKindEnum = pgEnum("event_registration_kind", ["fighter", "staff"]);
+
+export const eventRegistrationStatusEnum = pgEnum("event_registration_status", [
+  "submitted",
+  "confirmed",
+  "waitlisted",
+  "withdrawn",
+  "cancelled",
+]);
+
+export const scheduleEntryStatusEnum = pgEnum("schedule_entry_status", [
+  "planned",
+  "delayed",
+  "cancelled",
+]);
+
+export const events = pgTable(
+  "event",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    name: text("name").notNull(),
+    description: text("description"),
+    timezone: text("timezone").notNull().default("America/New_York"),
+    startsAt: timestamp("starts_at", { withTimezone: true, mode: "date" }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true, mode: "date" }),
+    venueLabel: text("venue_label").notNull(),
+    lifecycleStatus: eventLifecycleStatusEnum("lifecycle_status").notNull().default("draft"),
+    isSanctioned: boolean("is_sanctioned").notNull().default(false),
+    sanctioningNotes: text("sanctioning_notes"),
+    organizerUserId: text("organizer_user_id")
+      .notNull()
+      .references(() => users.id),
+    registrationOpensAt: timestamp("registration_opens_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    registrationClosesAt: timestamp("registration_closes_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    fighterCapacity: integer("fighter_capacity"),
+    staffCapacity: jsonb("staff_capacity").$type<Record<string, number>>(),
+    fighterConfirmationRequiredDaysBefore: integer("fighter_confirmation_required_days_before"),
+    createdByUserId: text("created_by_user_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    publishedAt: timestamp("published_at", { withTimezone: true, mode: "date" }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true, mode: "date" }),
+    cancellationReason: text("cancellation_reason"),
+  },
+  (t) => ({
+    lifecycleStartsAtIdx: index("event_lifecycle_starts_at_idx").on(t.lifecycleStatus, t.startsAt),
+  }),
+);
+
+export const eventRegistrations = pgTable(
+  "event_registration",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    registrationKind: eventRegistrationKindEnum("registration_kind").notNull(),
+    staffOperationalRoleKey: text("staff_operational_role_key"),
+    status: eventRegistrationStatusEnum("status").notNull(),
+    teamId: uuid("team_id").references(() => teams.id),
+    teamMembershipId: uuid("team_membership_id").references(() => teamMemberships.id),
+    teamNameSnapshot: text("team_name_snapshot"),
+    submittedAt: timestamp("submitted_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true, mode: "date" }),
+    waitlistedAt: timestamp("waitlisted_at", { withTimezone: true, mode: "date" }),
+    withdrawnAt: timestamp("withdrawn_at", { withTimezone: true, mode: "date" }),
+    withdrawnByUserId: text("withdrawn_by_user_id").references(() => users.id),
+    withdrawalReason: text("withdrawal_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => ({
+    activeRegistrationUnique: uniqueIndex("event_registration_event_user_kind_active")
+      .on(t.eventId, t.userId, t.registrationKind)
+      .where(sql`${t.status} IN ('confirmed', 'waitlisted', 'submitted')`),
+    eventIdIdx: index("event_registration_event_id_idx").on(t.eventId),
+  }),
+);
+
+export const scheduleEntries = pgTable("schedule_entry", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  label: text("label").notNull(),
+  scheduledStartAt: timestamp("scheduled_start_at", { withTimezone: true, mode: "date" }).notNull(),
+  scheduledEndAt: timestamp("scheduled_end_at", { withTimezone: true, mode: "date" }),
+  durationMinutes: integer("duration_minutes"),
+  status: scheduleEntryStatusEnum("status").notNull().default("planned"),
+  venueLabelOverride: text("venue_label_override"),
+  eventRegistrationId: uuid("event_registration_id").references(() => eventRegistrations.id),
+  placeholderLabel: text("placeholder_label"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
+export const scheduleChangeRecords = pgTable("schedule_change_record", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  scheduleEntryId: uuid("schedule_entry_id")
+    .notNull()
+    .references(() => scheduleEntries.id, { onDelete: "cascade" }),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => events.id, { onDelete: "cascade" }),
+  fieldName: text("field_name").notNull(),
+  priorValue: text("prior_value"),
+  newValue: text("new_value"),
+  reason: text("reason"),
+  actorUserId: text("actor_user_id")
+    .notNull()
+    .references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});

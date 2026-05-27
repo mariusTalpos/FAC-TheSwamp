@@ -11,6 +11,7 @@ export default async function MePage() {
 
   const isAdmin = session.user.roleKeys?.includes("fac_admin");
   const isMarshal = session.user.roleKeys?.includes("marshal");
+  const isOrganizer = session.user.roleKeys?.includes("organizer");
   const roleKeys = session.user.roleKeys ?? [];
 
   return (
@@ -21,6 +22,14 @@ export default async function MePage() {
         <li>
           <Link href="/me/fighter-profile">Fighter profile</Link>
         </li>
+        <li>
+          <Link href="/events">Upcoming events</Link>
+        </li>
+        {isOrganizer || isAdmin ? (
+          <li>
+            <Link href="/organizer/events">Organizer — events</Link>
+          </li>
+        ) : null}
         {!isMarshal || roleKeys.includes("fighter") || roleKeys.length === 0 ? (
           <li>
             <Link href="/me/team-affiliation">Team affiliation</Link>

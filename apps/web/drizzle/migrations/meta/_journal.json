@@ -15,6 +15,20 @@
       "when": 1779408273379,
       "tag": "0001_elite_speedball",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779850403851,
+      "tag": "0002_worthless_hercules",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1779924367388,
+      "tag": "0003_silent_rachel_grey",
+      "breakpoints": true
     }
   ]
 }
