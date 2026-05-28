@@ -1,83 +1,60 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { ProblemAlert, SuccessMessage } from "@/components/ui";
+import { apiDelete, apiGet, apiPost } from "@/lib/api/client";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 type UserRow = { id: string; email: string; status: string };
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<UserRow[]>([]);
   const [email, setEmail] = useState("");
   const [mode, setMode] = useState<"direct_active" | "email_invitation">("direct_active");
   const [initialPassword, setInitialPassword] = useState("");
   const [targetUserId, setTargetUserId] = useState("");
   const [roleKey, setRoleKey] = useState("marshal");
   const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch("/api/admin/users");
-    if (!res.ok) return;
-    const data = (await res.json()) as { items: UserRow[] };
-    setUsers(data.items);
-  }, []);
+  const { data, error, runMutation } = useApiResource({
+    resourceKey: "admin-users",
+    loader: () => apiGet<{ items: UserRow[] }>("/api/admin/users"),
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const users = data?.items ?? [];
+  const displayError = localError ?? error;
 
   async function provision() {
-    setError(null);
+    setLocalError(null);
     setMessage(null);
     const body =
       mode === "direct_active"
         ? { provisionMode: mode, email, initialPassword }
         : { provisionMode: mode, email };
-    const res = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Provision failed");
-      return;
-    }
-    setMessage(`Created user ${data.userId as string}`);
-    await load();
+    const created = await runMutation(() =>
+      apiPost<{ userId: string }>("/api/admin/users", body),
+    );
+    if (created) setMessage(`Created user ${created.userId}`);
   }
 
   async function assignRole() {
-    setError(null);
+    setLocalError(null);
     setMessage(null);
-    const res = await fetch(`/api/admin/users/${targetUserId}/roles`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ operationalRoleKey: roleKey }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(typeof data.message === "string" ? data.message : "Assign failed");
-      return;
-    }
-    setMessage("Role assigned.");
+    const ok = await runMutation(() =>
+      apiPost(`/api/admin/users/${targetUserId}/roles`, { operationalRoleKey: roleKey }),
+    );
+    if (ok !== null) setMessage("Role assigned.");
   }
 
   async function revokeRole() {
     if (!window.confirm("Revoke this role from the user?")) return;
-    setError(null);
+    setLocalError(null);
     setMessage(null);
-    const res = await fetch(`/api/admin/users/${targetUserId}/roles`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ operationalRoleKey: roleKey }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(typeof data.message === "string" ? data.message : "Revoke failed");
-      return;
-    }
-    setMessage("Role revoked.");
+    const ok = await runMutation(() =>
+      apiDelete(`/api/admin/users/${targetUserId}/roles`, { operationalRoleKey: roleKey }),
+    );
+    if (ok !== null) setMessage("Role revoked.");
   }
 
   async function deactivate() {
@@ -88,33 +65,19 @@ export default function AdminUsersPage() {
     ) {
       return;
     }
-    setError(null);
+    setLocalError(null);
     setMessage(null);
-    const res = await fetch(`/api/admin/users/${targetUserId}/deactivate`, {
-      method: "POST",
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(typeof data.message === "string" ? data.message : "Deactivate failed");
-      return;
-    }
-    setMessage("User deactivated.");
-    await load();
+    const ok = await runMutation(() =>
+      apiPost(`/api/admin/users/${targetUserId}/deactivate`),
+    );
+    if (ok !== null) setMessage("User deactivated.");
   }
 
   return (
     <main>
       <h1>Admin — users</h1>
-      {error ? (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {message ? (
-        <p className="success" role="status">
-          {message}
-        </p>
-      ) : null}
+      {displayError ? <ProblemAlert message={displayError} /> : null}
+      {message ? <SuccessMessage message={message} /> : null}
 
       <section className="stack" aria-labelledby="provision-heading">
         <h2 id="provision-heading">Provision user</h2>

@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { EmptyState, ProblemAlert } from "@/components/ui";
+import { apiGet } from "@/lib/api/client";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 type OverviewPerson = {
   userId: string;
@@ -92,28 +95,12 @@ function RoleGroupsPanel({ groups }: { groups: RoleGroup[] }) {
 }
 
 export default function AdminTeamsOverviewPage() {
-  const [teams, setTeams] = useState<TeamOverview[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, error, loading } = useApiResource({
+    resourceKey: "admin-teams-overview",
+    loader: () => apiGet<{ teams: TeamOverview[] }>("/api/admin/teams/overview"),
+  });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    const res = await fetch("/api/admin/teams/overview");
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Failed to load team overview");
-      setTeams([]);
-      setLoading(false);
-      return;
-    }
-    setTeams((data as { teams: TeamOverview[] }).teams);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const teams = data?.teams ?? [];
 
   return (
     <main className="wide overview-surface">
@@ -126,15 +113,13 @@ export default function AdminTeamsOverviewPage() {
       </p>
 
       {error ? (
-        <p className="error" role="alert">
-          {error}
-        </p>
+        <ProblemAlert message={error} />
       ) : null}
 
       {loading ? (
         <p role="status">Loading teams…</p>
       ) : teams.length === 0 ? (
-        <p role="status">No teams yet.</p>
+        <EmptyState title="No teams yet." />
       ) : (
         <table className="overview-table overview-table--teams">
           <caption className="sr-only">Teams with expandable role breakdown</caption>

@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { ProblemAlert, StatusBadge, SuccessMessage } from "@/components/ui";
+import { apiGet, apiPost } from "@/lib/api/client";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 type Team = {
   id: string;
@@ -11,49 +14,35 @@ type Team = {
 };
 
 export default function AdminTeamsPage() {
-  const [teams, setTeams] = useState<Team[]>([]);
   const [name, setName] = useState("");
   const [region, setRegion] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch("/api/admin/teams");
-    if (!res.ok) return;
-    setTeams((await res.json()) as Team[]);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data: teams, error, runMutation } = useApiResource({
+    resourceKey: "admin-teams",
+    loader: () => apiGet<Team[]>("/api/admin/teams"),
+  });
 
   async function createTeam(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     setMessage(null);
-    const res = await fetch("/api/admin/teams", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const created = await runMutation(() =>
+      apiPost<Team>("/api/admin/teams", {
         name,
         region: region || undefined,
         contactEmail: contactEmail || undefined,
         contactPhone: contactPhone || undefined,
       }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Create failed");
-      return;
+    );
+    if (created) {
+      setMessage(`Created team ${created.name}`);
+      setName("");
+      setRegion("");
+      setContactEmail("");
+      setContactPhone("");
     }
-    setMessage(`Created team ${data.name as string}`);
-    setName("");
-    setRegion("");
-    setContactEmail("");
-    setContactPhone("");
-    await load();
   }
 
   return (
@@ -115,19 +104,16 @@ export default function AdminTeamsPage() {
         </form>
       </section>
 
-      {error ? (
-        <p role="alert" style={{ color: "crimson" }}>
-          {error}
-        </p>
-      ) : null}
-      {message ? <p role="status">{message}</p> : null}
+      {error ? <ProblemAlert message={error} /> : null}
+      {message ? <SuccessMessage message={message} /> : null}
 
       <section aria-labelledby="team-list-heading">
         <h2 id="team-list-heading">All teams</h2>
         <ul>
-          {teams.map((t) => (
+          {(teams ?? []).map((t) => (
             <li key={t.id}>
-              <Link href={`/admin/teams/${t.id}`}>{t.name}</Link> — {t.status}
+              <Link href={`/admin/teams/${t.id}`}>{t.name}</Link> —{" "}
+              <StatusBadge variant="team" status={t.status} />
               {t.region ? ` (${t.region})` : ""}
             </li>
           ))}

@@ -1,59 +1,42 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ProblemAlert, StatusBadge } from "@/components/ui";
+import { apiDelete, apiGet, apiPost } from "@/lib/api/client";
 import type { EventResponse } from "@/lib/events/contracts";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 export default function AdminEventPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const [event, setEvent] = useState<EventResponse | null>(null);
   const [notes, setNotes] = useState("");
   const [newOrganizerId, setNewOrganizerId] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/events/${eventId}`);
-    if (res.ok) setEvent((await res.json()) as EventResponse);
-  }, [eventId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data: event, error, runMutation, reload } = useApiResource({
+    resourceKey: `admin-event-${eventId}`,
+    loader: () => apiGet<EventResponse>(`/api/events/${eventId}`),
+  });
 
   async function sanction() {
-    setError(null);
-    const res = await fetch(`/api/admin/events/${eventId}/sanction`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sanctioningNotes: notes || undefined }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Sanction failed");
-      return;
-    }
-    setEvent(data as EventResponse);
+    await runMutation(() =>
+      apiPost<EventResponse>(`/api/admin/events/${eventId}/sanction`, {
+        sanctioningNotes: notes || undefined,
+      }),
+    );
   }
 
   async function revokeSanction() {
-    const res = await fetch(`/api/admin/events/${eventId}/sanction`, { method: "DELETE" });
-    if (res.ok) setEvent((await res.json()) as EventResponse);
+    await runMutation(() => apiDelete<EventResponse>(`/api/admin/events/${eventId}/sanction`));
+    await reload();
   }
 
   async function reassign() {
-    setError(null);
-    const res = await fetch(`/api/admin/events/${eventId}/organizer`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ newOrganizerUserId: newOrganizerId }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Reassign failed");
-      return;
-    }
-    setEvent(data as EventResponse);
+    await runMutation(() =>
+      apiPost<EventResponse>(`/api/admin/events/${eventId}/organizer`, {
+        newOrganizerUserId: newOrganizerId,
+      }),
+    );
   }
 
   if (!event) return <main><p>Loading…</p></main>;
@@ -66,9 +49,10 @@ export default function AdminEventPage() {
         <Link href={`/organizer/events/${eventId}/registrations`}>Registrations</Link>
       </p>
       <p>
-        Sanctioned: {event.isSanctioned ? "yes" : "no"} · Organizer: {event.organizerUserId}
+        Sanctioned: {event.isSanctioned ? "yes" : "no"} · Organizer: {event.organizerUserId} ·{" "}
+        <StatusBadge variant="event-lifecycle" status={event.lifecycleStatus} />
       </p>
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? <ProblemAlert message={error} /> : null}
 
       <section aria-labelledby="sanction-heading">
         <h2 id="sanction-heading">Sanction</h2>
