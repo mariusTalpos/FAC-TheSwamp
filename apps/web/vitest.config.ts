@@ -4,6 +4,9 @@ import path from "path";
 export default defineConfig({
   test: {
     environment: "node",
+    environmentMatchGlobs: [
+      ["tests/unit/hooks/**", "happy-dom"],
+    ],
     include: ["tests/**/*.test.ts"],
   },
   resolve: {

@@ -1,55 +1,52 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ProblemAlert, StatusBadge, SuccessMessage } from "@/components/ui";
+import { apiGet, apiPost } from "@/lib/api/client";
 import type {
   EventScheduleResponse,
   ScheduleChangeRecordResponse,
   ScheduleEntryResponse,
 } from "@/lib/events/contracts";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 export default function OrganizerSchedulePage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const [board, setBoard] = useState<EventScheduleResponse | null>(null);
-  const [changes, setChanges] = useState<ScheduleChangeRecordResponse[]>([]);
   const [label, setLabel] = useState("");
   const [startAt, setStartAt] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const [bRes, cRes] = await Promise.all([
-      fetch(`/api/events/${eventId}/schedule`),
-      fetch(`/api/events/${eventId}/schedule/changes`),
-    ]);
-    if (bRes.ok) setBoard((await bRes.json()) as EventScheduleResponse);
-    if (cRes.ok) setChanges((await cRes.json()) as ScheduleChangeRecordResponse[]);
-  }, [eventId]);
+  const { data, error, runMutation } = useApiResource({
+    resourceKey: `organizer-schedule-${eventId}`,
+    loader: async () => {
+      const [board, changes] = await Promise.all([
+        apiGet<EventScheduleResponse>(`/api/events/${eventId}/schedule`),
+        apiGet<ScheduleChangeRecordResponse[]>(`/api/events/${eventId}/schedule/changes`),
+      ]);
+      return { board, changes };
+    },
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const board = data?.board ?? null;
+  const changes = data?.changes ?? [];
 
   async function addEntry(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    const res = await fetch(`/api/events/${eventId}/schedule/entries`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    setMessage(null);
+    const result = await runMutation(() =>
+      apiPost(`/api/events/${eventId}/schedule/entries`, {
         label,
         scheduledStartAt: new Date(startAt).toISOString(),
         acknowledgeScheduleWarnings: true,
       }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Create failed");
-      return;
+    );
+    if (result !== null) {
+      setLabel("");
+      setStartAt("");
+      setMessage("Schedule entry added");
     }
-    setLabel("");
-    setStartAt("");
-    await load();
   }
 
   return (
@@ -59,7 +56,8 @@ export default function OrganizerSchedulePage() {
         <Link href={`/organizer/events/${eventId}`}>Event detail</Link> · Timezone:{" "}
         {board?.timezone}
       </p>
-      {error ? <p role="alert">{error}</p> : null}
+      {error ? <ProblemAlert message={error} /> : null}
+      {message ? <SuccessMessage message={message} /> : null}
 
       <form onSubmit={addEntry} aria-labelledby="add-entry-heading">
         <h2 id="add-entry-heading">Add entry</h2>
@@ -87,8 +85,8 @@ export default function OrganizerSchedulePage() {
         <ol>
           {(board?.entries ?? []).map((entry: ScheduleEntryResponse) => (
             <li key={entry.id}>
-              {entry.label} — {entry.scheduledStartAt} ({board?.timezone}) · status:{" "}
-              <span>{entry.status}</span>
+              {entry.label} — {entry.scheduledStartAt} ({board?.timezone}) ·{" "}
+              <StatusBadge variant="schedule" status={entry.status} />
             </li>
           ))}
         </ol>

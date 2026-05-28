@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ProblemAlert } from "@/components/ui";
+import { apiGet, apiPost } from "@/lib/api/client";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 type Member = {
   id: string;
@@ -13,32 +15,20 @@ type Member = {
 
 export default function CaptainRosterPage() {
   const teamId = useParams().teamId as string;
-  const [members, setMembers] = useState<Member[]>([]);
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/captain/teams/${teamId}/roster`);
-    if (!res.ok) return;
-    const data = (await res.json()) as { members: Member[] };
-    setMembers(data.members);
-  }, [teamId]);
+  const { data, error, runMutation } = useApiResource({
+    resourceKey: `captain-roster-${teamId}`,
+    loader: () =>
+      apiGet<{ members: Member[] }>(`/api/captain/teams/${teamId}/roster`),
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const members = data?.members ?? [];
 
   async function endMembership(membershipId: string, display: string) {
     if (!window.confirm(`Remove ${display} from the active roster?`)) return;
-    setError(null);
-    const res = await fetch(`/api/captain/teams/${teamId}/memberships/${membershipId}/end`, {
-      method: "POST",
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Remove failed");
-      return;
-    }
-    await load();
+    await runMutation(() =>
+      apiPost(`/api/captain/teams/${teamId}/memberships/${membershipId}/end`),
+    );
   }
 
   return (
@@ -76,11 +66,7 @@ export default function CaptainRosterPage() {
           ))}
         </tbody>
       </table>
-      {error ? (
-        <p role="alert" style={{ color: "crimson" }}>
-          {error}
-        </p>
-      ) : null}
+      {error ? <ProblemAlert message={error} /> : null}
     </main>
   );
 }

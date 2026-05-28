@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ProblemAlert, StatusBadge, SuccessMessage } from "@/components/ui";
+import { apiDelete, apiErrorMessage, apiGet, apiPatch, apiPost } from "@/lib/api/client";
 
 type Team = {
   id: string;
@@ -40,32 +42,21 @@ export default function AdminTeamDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [teamsRes, rosterRes, histRes, usersRes, captainsRes] = await Promise.all([
-      fetch("/api/admin/teams"),
-      fetch(`/api/admin/teams/${teamId}/roster`),
-      fetch(`/api/admin/teams/${teamId}/memberships/history`),
-      fetch("/api/admin/users"),
-      fetch(`/api/admin/teams/${teamId}/captains`),
-    ]);
-    if (teamsRes.ok) {
-      const all = (await teamsRes.json()) as Team[];
+    try {
+      const [all, rosterData, histData, usersData, captainsData] = await Promise.all([
+        apiGet<Team[]>("/api/admin/teams"),
+        apiGet<{ members: Member[] }>(`/api/admin/teams/${teamId}/roster`),
+        apiGet<{ memberships: Member[] }>(`/api/admin/teams/${teamId}/memberships/history`),
+        apiGet<{ items: UserRow[] }>("/api/admin/users"),
+        apiGet<{ captains: CaptainRow[] }>(`/api/admin/teams/${teamId}/captains`),
+      ]);
       setTeam(all.find((t) => t.id === teamId) ?? null);
-    }
-    if (rosterRes.ok) {
-      const data = (await rosterRes.json()) as { members: Member[] };
-      setRoster(data.members);
-    }
-    if (histRes.ok) {
-      const data = (await histRes.json()) as { memberships: Member[] };
-      setHistory(data.memberships);
-    }
-    if (usersRes.ok) {
-      const data = (await usersRes.json()) as { items: UserRow[] };
-      setUsers(data.items);
-    }
-    if (captainsRes.ok) {
-      const data = (await captainsRes.json()) as { captains: CaptainRow[] };
-      setCaptains(data.captains);
+      setRoster(rosterData.members);
+      setHistory(histData.memberships);
+      setUsers(usersData.items);
+      setCaptains(captainsData.captains);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not load team"));
     }
   }, [teamId]);
 
@@ -87,85 +78,66 @@ export default function AdminTeamDetailPage() {
     e.preventDefault();
     setError(null);
     setMessage(null);
-    const res = await fetch(`/api/admin/teams/${teamId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, region: region || null }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Update failed");
-      return;
+    try {
+      await apiPatch(`/api/admin/teams/${teamId}`, { name, region: region || null });
+      setMessage("Team updated.");
+      await load();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Update failed"));
     }
-    setMessage("Team updated.");
-    await load();
   }
 
   async function deactivate() {
     if (!window.confirm("Deactivate this team? New applications will be blocked.")) return;
     setError(null);
     setMessage(null);
-    const res = await fetch(`/api/admin/teams/${teamId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "deactivated" }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(typeof data.message === "string" ? data.message : "Deactivate failed");
-      return;
+    try {
+      await apiPatch(`/api/admin/teams/${teamId}`, { status: "deactivated" });
+      setMessage("Team deactivated.");
+      await load();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Deactivate failed"));
     }
-    setMessage("Team deactivated.");
-    await load();
   }
 
   async function assignCaptain(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setMessage(null);
-    const res = await fetch(`/api/admin/teams/${teamId}/captains`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: captainUserId }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Assign failed");
-      return;
+    try {
+      await apiPost(`/api/admin/teams/${teamId}/captains`, { userId: captainUserId });
+      setMessage("Captain assigned.");
+      setCaptainUserId("");
+      await load();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Assign failed"));
     }
-    setMessage("Captain assigned.");
-    setCaptainUserId("");
-    await load();
   }
 
   async function revokeCaptain(userId: string, email: string) {
     if (!window.confirm(`Revoke captain role for ${email}?`)) return;
     setError(null);
     setMessage(null);
-    const res = await fetch(`/api/admin/teams/${teamId}/captains/${userId}`, { method: "DELETE" });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Revoke failed");
-      return;
+    try {
+      await apiDelete(`/api/admin/teams/${teamId}/captains/${userId}`);
+      setMessage(`Captain role revoked for ${email}.`);
+      await load();
+    } catch (err) {
+      setError(apiErrorMessage(err, "Revoke failed"));
     }
-    setMessage(`Captain role revoked for ${email}.`);
-    await load();
   }
 
   async function endMembership(membershipId: string) {
     if (!window.confirm("Remove this member from the active roster?")) return;
     setError(null);
     setMessage(null);
-    const res = await fetch(`/api/admin/teams/${teamId}/memberships/${membershipId}/end`, {
-      method: "POST",
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "End failed");
-      return;
+    try {
+      await apiPost(`/api/admin/teams/${teamId}/memberships/${membershipId}/end`);
+      setMessage("Membership ended.");
+      await load();
+    } catch (err) {
+      setError(apiErrorMessage(err, "End failed"));
     }
-    setMessage("Membership ended.");
-    await load();
   }
 
   if (!team) {
@@ -180,22 +152,14 @@ export default function AdminTeamDetailPage() {
     <main>
       <h1>{team.name}</h1>
       <p>
-        Status: <strong>{team.status}</strong>
+        Status: <StatusBadge variant="team" status={team.status} />
       </p>
       <p>
         <Link href="/admin/teams">All teams</Link> · <Link href="/me">Account</Link>
       </p>
 
-      {error ? (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      ) : null}
-      {message ? (
-        <p className="success" role="status">
-          {message}
-        </p>
-      ) : null}
+      {error ? <ProblemAlert message={error} /> : null}
+      {message ? <SuccessMessage message={message} /> : null}
 
       <section aria-labelledby="edit-team-heading">
         <h2 id="edit-team-heading">Edit metadata</h2>

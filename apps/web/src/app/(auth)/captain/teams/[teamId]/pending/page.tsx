@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams } from "next/navigation";
+import { ProblemAlert } from "@/components/ui";
+import { apiGet, apiPost } from "@/lib/api/client";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 type Pending = {
   id: string;
@@ -12,40 +15,27 @@ type Pending = {
 
 export default function CaptainPendingPage() {
   const teamId = useParams().teamId as string;
-  const [items, setItems] = useState<Pending[]>([]);
   const [filter, setFilter] = useState<"all" | "fighter" | "squire">("all");
   const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/captain/teams/${teamId}/pending`);
-    if (!res.ok) return;
-    const data = (await res.json()) as { items: Pending[] };
-    setItems(data.items);
-  }, [teamId]);
+  const { data, error, runMutation } = useApiResource({
+    resourceKey: `captain-pending-${teamId}`,
+    loader: () => apiGet<{ items: Pending[] }>(`/api/captain/teams/${teamId}/pending`),
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
+  const items = data?.items ?? [];
   const filtered = items.filter((i) => filter === "all" || i.memberKind === filter);
 
   async function decide(membershipId: string, decision: "approve" | "reject") {
     const label = decision === "approve" ? "Approve" : "Reject";
     if (!window.confirm(`${label} this application?`)) return;
-    setError(null);
-    const res = await fetch(`/api/captain/teams/${teamId}/memberships/${membershipId}/decide`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ decision, note: note || undefined }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : `${label} failed`);
-      return;
-    }
+    await runMutation(() =>
+      apiPost(`/api/captain/teams/${teamId}/memberships/${membershipId}/decide`, {
+        decision,
+        note: note || undefined,
+      }),
+    );
     setNote("");
-    await load();
   }
 
   return (
@@ -81,11 +71,7 @@ export default function CaptainPendingPage() {
           </li>
         ))}
       </ul>
-      {error ? (
-        <p role="alert" style={{ color: "crimson" }}>
-          {error}
-        </p>
-      ) : null}
+      {error ? <ProblemAlert message={error} /> : null}
     </main>
   );
 }

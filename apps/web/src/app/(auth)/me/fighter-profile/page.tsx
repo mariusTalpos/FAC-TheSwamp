@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ProblemAlert } from "@/components/ui";
+import { apiErrorMessage, apiGet, apiPatch } from "@/lib/api/client";
 
 type Profile = {
   id: string;
@@ -24,13 +26,15 @@ export default function FighterProfileEditorPage() {
 
   useEffect(() => {
     void (async () => {
-      const res = await fetch("/api/me/fighter-profile");
-      if (!res.ok) return;
-      const data = (await res.json()) as Profile;
-      setProfile(data);
-      setDisplayName(data.displayName ?? "");
-      setRingName(data.ringName ?? "");
-      setRingPublic(data.visibility?.ringName?.public !== false);
+      try {
+        const data = await apiGet<Profile>("/api/me/fighter-profile");
+        setProfile(data);
+        setDisplayName(data.displayName ?? "");
+        setRingName(data.ringName ?? "");
+        setRingPublic(data.visibility?.ringName?.public !== false);
+      } catch {
+        setError("Could not load profile");
+      }
     })();
   }, []);
 
@@ -45,26 +49,18 @@ export default function FighterProfileEditorPage() {
     setError(null);
     setPending(true);
     try {
-      const res = await fetch("/api/me/fighter-profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          displayName,
-          ringName: ringNameTrimmed || null,
-          visibility: canToggleRingPublic
-            ? { ringName: { public: ringPublic } }
-            : { ringName: { public: false } },
-        }),
+      const next = await apiPatch<Profile>("/api/me/fighter-profile", {
+        displayName,
+        ringName: ringNameTrimmed || null,
+        visibility: canToggleRingPublic
+          ? { ringName: { public: ringPublic } }
+          : { ringName: { public: false } },
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(typeof data.message === "string" ? data.message : "Could not save profile");
-        return;
-      }
-      const next = data as Profile;
       setProfile(next);
       setRingName(next.ringName ?? "");
       setRingPublic(next.visibility?.ringName?.public !== false);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not save profile"));
     } finally {
       setPending(false);
     }
@@ -123,9 +119,7 @@ export default function FighterProfileEditorPage() {
           ) : null}
         </div>
         {error ? (
-          <p className="error" role="alert">
-            {error}
-          </p>
+          <ProblemAlert message={error} />
         ) : null}
         <button type="button" onClick={() => void save()} disabled={pending}>
           {pending ? "Saving…" : "Save"}

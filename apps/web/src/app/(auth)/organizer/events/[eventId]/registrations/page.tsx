@@ -1,59 +1,46 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { ProblemAlert, StatusBadge } from "@/components/ui";
+import { apiGet, apiPost } from "@/lib/api/client";
 import type { EventRegistrationSummaryResponse } from "@/lib/events/contracts";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 export default function OrganizerRegistrationsPage() {
   const { eventId } = useParams<{ eventId: string }>();
-  const [summary, setSummary] = useState<EventRegistrationSummaryResponse | null>(null);
   const [onBehalfUserId, setOnBehalfUserId] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/events/${eventId}/registrations`);
-    if (res.ok) setSummary((await res.json()) as EventRegistrationSummaryResponse);
-  }, [eventId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const { data: summary, error, runMutation } = useApiResource({
+    resourceKey: `organizer-registrations-${eventId}`,
+    loader: () =>
+      apiGet<EventRegistrationSummaryResponse>(`/api/events/${eventId}/registrations`),
+  });
 
   async function withdraw(registrationId: string) {
     const reason = window.prompt("Withdrawal reason (optional)") ?? undefined;
-    const res = await fetch(
-      `/api/events/${eventId}/registrations/${registrationId}/withdraw`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
-      },
+    setLocalError(null);
+    await runMutation(() =>
+      apiPost(`/api/events/${eventId}/registrations/${registrationId}/withdraw`, {
+        reason,
+      }),
     );
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(typeof data.message === "string" ? data.message : "Withdraw failed");
-      return;
-    }
-    await load();
   }
 
   async function onBehalf(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    const res = await fetch(`/api/events/${eventId}/registrations/fighter/on-behalf`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: onBehalfUserId }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "On-behalf failed");
-      return;
-    }
-    setOnBehalfUserId("");
-    await load();
+    setLocalError(null);
+    const ok = await runMutation(() =>
+      apiPost(`/api/events/${eventId}/registrations/fighter/on-behalf`, {
+        userId: onBehalfUserId,
+      }),
+    );
+    if (ok !== null) setOnBehalfUserId("");
   }
+
+  const displayError = localError ?? error;
 
   return (
     <main>
@@ -61,7 +48,7 @@ export default function OrganizerRegistrationsPage() {
       <p>
         <Link href={`/organizer/events/${eventId}`}>Event detail</Link>
       </p>
-      {error ? <p role="alert">{error}</p> : null}
+      {displayError ? <ProblemAlert message={displayError} /> : null}
 
       <form onSubmit={onBehalf} aria-labelledby="on-behalf-heading">
         <h2 id="on-behalf-heading">Register fighter on behalf</h2>
@@ -92,7 +79,9 @@ export default function OrganizerRegistrationsPage() {
               <tr key={r.id}>
                 <td>{r.registrationKind}</td>
                 <td>{r.userId}</td>
-                <td>{r.status}</td>
+                <td>
+                  <StatusBadge variant="registration" status={r.status} />
+                </td>
                 <td>
                   {["submitted", "confirmed", "waitlisted"].includes(r.status) ? (
                     <button type="button" onClick={() => void withdraw(r.id)}>

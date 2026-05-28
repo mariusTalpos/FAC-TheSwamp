@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { EmptyState, EntityList, ProblemAlert } from "@/components/ui";
+import { apiGet } from "@/lib/api/client";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 type AuditEvent = {
   id: string;
@@ -16,35 +18,32 @@ type AuditEvent = {
 export default function AdminUserAuditPage() {
   const params = useParams();
   const userId = params.userId as string;
-  const [items, setItems] = useState<AuditEvent[]>([]);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      const res = await fetch(`/api/admin/users/${userId}/audit?limit=50`);
-      if (!res.ok) {
-        setError("Could not load audit trail.");
-        return;
-      }
-      const data = (await res.json()) as { items: AuditEvent[] };
-      setItems(data.items);
-    })();
-  }, [userId]);
+  const { data, error } = useApiResource({
+    resourceKey: `admin-user-audit-${userId}`,
+    loader: () => apiGet<{ items: AuditEvent[] }>(`/api/admin/users/${userId}/audit?limit=50`),
+  });
+
+  const items = data?.items ?? [];
 
   return (
     <main>
       <h1>Audit trail</h1>
-      {error ? <p className="error">{error}</p> : null}
-      <ol>
-        {items.map((e) => (
-          <li key={e.id}>
+      {error ? <ProblemAlert message={error} /> : null}
+      <EntityList
+        items={items}
+        keyExtractor={(e) => e.id}
+        aria-label="Audit events"
+        renderRow={(e) => (
+          <>
             <strong>{e.eventType}</strong> — {new Date(e.createdAt).toLocaleString()}
             <pre style={{ fontSize: "0.8rem", overflow: "auto" }}>
               {JSON.stringify(e.payload, null, 2)}
             </pre>
-          </li>
-        ))}
-      </ol>
+          </>
+        )}
+        empty={<EmptyState title="No audit events found." />}
+      />
       <p>
         <Link href={`/admin/users/${userId}`}>Back</Link>
       </p>

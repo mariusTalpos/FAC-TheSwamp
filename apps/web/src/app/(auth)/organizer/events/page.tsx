@@ -1,40 +1,39 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { TimezoneSelect } from "@/components/timezone-select";
+import {
+  EmptyState,
+  EntityList,
+  EventListRow,
+  ProblemAlert,
+  SuccessMessage,
+} from "@/components/ui";
+import { apiGet, apiPost } from "@/lib/api/client";
 import type { EventResponse } from "@/lib/events/contracts";
 import { DEFAULT_EVENT_TIMEZONE } from "@/lib/events/timezone-options";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 export default function OrganizerEventsPage() {
-  const [events, setEvents] = useState<EventResponse[]>([]);
+  const { data: events, error, loading, runMutation } = useApiResource({
+    resourceKey: "organizer-events",
+    loader: () => apiGet<EventResponse[]>("/api/events?scope=organizer"),
+  });
+
   const [name, setName] = useState("");
   const [timezone, setTimezone] = useState(DEFAULT_EVENT_TIMEZONE);
   const [startsAt, setStartsAt] = useState("");
   const [venueLabel, setVenueLabel] = useState("");
   const [description, setDescription] = useState("");
   const [confirmationDays, setConfirmationDays] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    const res = await fetch("/api/events?scope=organizer");
-    if (!res.ok) return;
-    setEvents((await res.json()) as EventResponse[]);
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   async function createEvent(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
     setMessage(null);
-    const res = await fetch("/api/events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const created = await runMutation(() =>
+      apiPost<EventResponse>("/api/events", {
         name,
         timezone,
         startsAt: new Date(startsAt).toISOString(),
@@ -44,19 +43,15 @@ export default function OrganizerEventsPage() {
           ? Number(confirmationDays)
           : undefined,
       }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Create failed");
-      return;
+    );
+    if (created) {
+      setMessage(`Created draft event “${created.name}”`);
+      setName("");
+      setStartsAt("");
+      setVenueLabel("");
+      setDescription("");
+      setConfirmationDays("");
     }
-    setMessage(`Created draft event “${data.name as string}”`);
-    setName("");
-    setStartsAt("");
-    setVenueLabel("");
-    setDescription("");
-    setConfirmationDays("");
-    await load();
   }
 
   return (
@@ -133,20 +128,31 @@ export default function OrganizerEventsPage() {
           </p>
           <button type="submit">Create draft</button>
         </form>
-        {error ? <p role="alert">{error}</p> : null}
-        {message ? <p>{message}</p> : null}
+        {error ? <ProblemAlert message={error} /> : null}
+        {message ? <SuccessMessage message={message} /> : null}
       </section>
 
       <section aria-labelledby="my-events-heading">
         <h2 id="my-events-heading">Your events</h2>
-        <ul>
-          {events.map((ev) => (
-            <li key={ev.id}>
-              <Link href={`/organizer/events/${ev.id}`}>{ev.name}</Link> — {ev.lifecycleStatus}{" "}
-              ({ev.timezone})
-            </li>
-          ))}
-        </ul>
+        <EntityList
+          items={events ?? []}
+          keyExtractor={(ev) => ev.id}
+          loading={loading}
+          aria-label="Organizer events"
+          renderRow={(ev) => (
+            <EventListRow
+              event={ev}
+              href={`/organizer/events/${ev.id}`}
+              showOrganizerMeta
+            />
+          )}
+          empty={
+            <EmptyState
+              title="No events yet."
+              description="Create a draft event to get started."
+            />
+          }
+        />
       </section>
     </main>
   );

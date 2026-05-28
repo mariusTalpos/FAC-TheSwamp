@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { EmptyState, ProblemAlert, StatusBadge, SuccessMessage } from "@/components/ui";
+import { apiGet, apiPost } from "@/lib/api/client";
+import { useApiResource } from "@/hooks/use-api-resource";
 
 type AffiliationSlot = {
   status: string;
@@ -47,15 +50,16 @@ function AffiliationBlock({
     <section aria-labelledby={`${applyKind}-aff-heading`}>
       <h2 id={`${applyKind}-aff-heading`}>{title}</h2>
       {status === "unaffiliated" ? (
-        <p>
-          You are <strong>unaffiliated</strong> — not on a team roster yet. Apply to one team at a
-          time; a captain must approve before you appear on the active roster.
-        </p>
+        <EmptyState
+          title="You are unaffiliated"
+          description="Not on a team roster yet. Apply to one team at a time; a captain must approve before you appear on the active roster."
+        />
       ) : status === "pending" ? (
         <>
           <p>
-            Pending approval on <strong>{slot?.teamName}</strong>. You may only have one open
-            application at a time.
+            Pending approval on <strong>{slot?.teamName}</strong> (
+            <StatusBadge variant="application" status="pending" />
+            ). You may only have one open application at a time.
           </p>
           {slot?.membershipId ? (
             <p>
@@ -112,66 +116,44 @@ function AffiliationBlock({
 }
 
 export default function TeamAffiliationPage() {
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [teams, setTeams] = useState<Team[]>([]);
-  const [roster, setRoster] = useState<RosterMember[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const [affRes, teamsRes] = await Promise.all([
-      fetch("/api/me/team-affiliation"),
-      fetch("/api/teams"),
-    ]);
-    if (teamsRes.ok) setTeams((await teamsRes.json()) as Team[]);
-    if (!affRes.ok) return;
-    const s = (await affRes.json()) as Summary;
-    setSummary(s);
-    if (s.fighter?.status === "active" && s.fighter.teamId) {
-      const r = await fetch(`/api/me/teams/${s.fighter.teamId}/roster`);
-      if (r.ok) {
-        const data = (await r.json()) as { members: RosterMember[] };
-        setRoster(data.members);
+  const { data, error, runMutation } = useApiResource({
+    resourceKey: "me-team-affiliation",
+    loader: async () => {
+      const [summary, teams] = await Promise.all([
+        apiGet<Summary>("/api/me/team-affiliation"),
+        apiGet<Team[]>("/api/teams"),
+      ]);
+      let roster: RosterMember[] = [];
+      if (summary.fighter?.status === "active" && summary.fighter.teamId) {
+        const rosterData = await apiGet<{ members: RosterMember[] }>(
+          `/api/me/teams/${summary.fighter.teamId}/roster`,
+        );
+        roster = rosterData.members;
       }
-    } else {
-      setRoster([]);
-    }
-  }, []);
+      return { summary, teams, roster };
+    },
+  });
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const summary = data?.summary;
+  const teams = data?.teams ?? [];
+  const roster = data?.roster ?? [];
 
   async function applyToTeam(teamId: string, memberKind: "fighter" | "squire") {
-    setError(null);
     setMessage(null);
-    const res = await fetch("/api/me/team-memberships/apply", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ teamId, memberKind }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Application failed");
-      return;
-    }
-    setMessage("Application submitted.");
-    await load();
+    const ok = await runMutation(() =>
+      apiPost("/api/me/team-memberships/apply", { teamId, memberKind }),
+    );
+    if (ok !== null) setMessage("Application submitted.");
   }
 
   async function withdrawApplication(membershipId: string) {
-    setError(null);
     setMessage(null);
-    const res = await fetch(`/api/me/team-memberships/${membershipId}/withdraw`, {
-      method: "POST",
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(typeof data.message === "string" ? data.message : "Could not cancel application");
-      return;
-    }
-    setMessage("Application cancelled. You may apply to another team.");
-    await load();
+    const ok = await runMutation(() =>
+      apiPost(`/api/me/team-memberships/${membershipId}/withdraw`),
+    );
+    if (ok !== null) setMessage("Application cancelled. You may apply to another team.");
   }
 
   const fighter = summary?.fighter;
@@ -203,12 +185,8 @@ export default function TeamAffiliationPage() {
         />
       ) : null}
 
-      {error ? (
-        <p role="alert" style={{ color: "crimson" }}>
-          {error}
-        </p>
-      ) : null}
-      {message ? <p role="status">{message}</p> : null}
+      {error ? <ProblemAlert message={error} /> : null}
+      {message ? <SuccessMessage message={message} /> : null}
 
       {fighter?.status === "active" && roster.length > 0 ? (
         <section aria-labelledby="peer-roster-heading">
