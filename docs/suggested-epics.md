@@ -29,6 +29,8 @@ E5 Standings & public surfaces
 E6 Reporting & integrations
 
 E7 Engagement — optional; can start after E1 (consent/privacy) for media; comms often after E4–E5
+
+E8 Fighter birthdays — optional; after E1 (profile); may overlap E7 if notifications or surfacing
 ```
 
 ---
@@ -126,6 +128,19 @@ E7 Engagement — optional; can start after E1 (consent/privacy) for media; comm
 
 ---
 
+### E8 — Fighter birthdays
+
+| Field | Content |
+|--------|---------|
+| **Depends on** | E1 (fighter profile baseline). Optional overlap with E7 if birthdays drive notifications or community surfacing. |
+| **Platform map** | TBD — likely §5.1 (profile fields); §5.6 / §5.9 if engagement or alerts apply. |
+| **Outcome** | TBD — FAC can capture fighter birth dates and use them in agreed workflows while respecting consent and visibility rules. |
+| **In scope (typical)** | TBD — e.g. birth date on profile, privacy controls, who can see what, any FAC-facing birthday experiences. |
+| **Out of scope (defer)** | TBD |
+| **Spec naming hint** | e.g. `spec-fighter-birthdays.md` |
+
+---
+
 ## Splitting epics without losing the map
 
 - **Governance (§5.7)** spans E1 (roles, audit), E4 (result corrections), and E6 (exports, retention). Re-state only the slice each spec owns; link “see also” to sibling specs.
@@ -134,4 +149,5 @@ E7 Engagement — optional; can start after E1 (consent/privacy) for media; comm
 
 ---
 
+**Revision**: 0.2 — 2026-05-29 — Added E8 Fighter birthdays (skeleton).  
 **Revision**: 0.1 — 2026-05-13 — Initial epic list split from platform architecture doc for per-epic Spec Kit specs.
